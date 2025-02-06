@@ -1,3 +1,3 @@
 # websocket-project
 
-Dependencies - flask
+pip install flask flask-socketio

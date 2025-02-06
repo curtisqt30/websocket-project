@@ -11,11 +11,15 @@
     <div class="chat-container">
         <h1>Chatroom</h1>
         <div id="messages"></div>
-        <input type="text" id="messageInput" placeholder="Type a message...">
+        
+        <!-- Input field for messages -->
+        <input type="text" id="messageInput" placeholder="Type a message..." maxlength="50">
         <button onclick="sendMessage()">Send</button> 
+
+        <!-- Character counter display -->
+        <p id="charCount">50 characters remaining</p>
     </div>
 
-    <!-- Only one instance of client.js -->
     <script src="{{ url_for('static', filename='client.js') }}"></script>
 </body>
 </html>
