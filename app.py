@@ -3,11 +3,12 @@ from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret-key"
+socketio = SocketIO(app)
 
 @socketio.on("connect")
 def handle_connect():
-    pass
-
+    print("A client connected")
+    
 @socketio.on("join")
 def handle_join(data):
     pass
@@ -18,7 +19,7 @@ def handle_message(data):
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    pass
+    print("A client disconnected")
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5000)
