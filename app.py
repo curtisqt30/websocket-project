@@ -5,13 +5,23 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret-key"
 socketio = SocketIO(app)
 
+@app.route("/")
+def login_page():
+    return render_template("login.html")
+
+@app.route("/chat")
+def chat_page():
+    return render_template("chat.html")
+
 @socketio.on("connect")
 def handle_connect():
     print("A client connected")
     
 @socketio.on("join")
 def handle_join(data):
-    pass
+    username = data.get("user")
+    join_room("chatroom")
+    emit("user_joined", {"msg": f"{username} joined the chat"}, room="chatroom")
 
 @socketio.on("message")
 def handle_message(data):
