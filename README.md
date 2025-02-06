@@ -1,1 +1,3 @@
 # websocket-project
+
+Dependencies - flask

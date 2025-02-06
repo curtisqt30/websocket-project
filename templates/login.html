@@ -7,6 +7,22 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <div class="login-container">
+        <h1>Join Chatroom</h1>
+        <input type="text" id="username" placeholder="Enter Username">
+        <button onclick="joinChat()">Join</button>
+    </div>
 
+    <script>
+        function joinChat() {
+            let username = document.getElementById("username").value;
+            if (username.trim() !== "") {
+                sessionStorage.setItem("username", username);
+                window.location.href = "/chat";  // Redirect to chat page
+            } else {
+                alert("Please enter a username");
+            }
+        }
+    </script>
 </body>
 </html>

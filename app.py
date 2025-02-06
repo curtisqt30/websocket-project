@@ -25,7 +25,10 @@ def handle_join(data):
 
 @socketio.on("message")
 def handle_message(data):
-    pass
+    user = data.get("user")
+    msg = data.get("msg")
+    print(f"Received message from {user}: {msg}")
+    emit("message", {"user": user, "msg": msg}, broadcast=True)
 
 @socketio.on("disconnect")
 def handle_disconnect():

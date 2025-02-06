@@ -3,7 +3,21 @@ body {
     text-align: center;
 }
 
+.login-container, .chat-container {
+    width: 300px;
+    margin: auto;
+    padding: 20px;
+    border: 1px solid #ccc;
+    border-radius: 10px;
+}
 
+#messages {
+    height: 300px;
+    overflow-y: scroll;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+}
 
 input {
     width: 80%;
