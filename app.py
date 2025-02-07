@@ -1,5 +1,6 @@
 from flask import Flask, render_template, redirect, url_for
 from flask_socketio import SocketIO, emit, join_room
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 # Flask init
 app = Flask(__name__)
@@ -7,8 +8,12 @@ app = Flask(__name__)
 # Secret key for sessions
 app.config["SECRET_KEY"] = "secret-key"
 
+jwt = JWTManager(app)
+
 # Initialize flask with CORS allowed for all
 socketio = SocketIO(app, cors_allowed_origins="*")
+
+connected_users = {}
 
 ### Route definitions ###
 @app.route("/")
