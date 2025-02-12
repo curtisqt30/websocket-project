@@ -1,39 +1,34 @@
-// username from session storage
+// Get username from sessionStorage
 let username = sessionStorage.getItem("username");
 
 // Redirect to login page if no username
 if (!username) {
-    window.location.href = "/";
+    window.location.href = "/login";
 }
 
-// Establish WebSocket connection with server
-let socket = io.connect("ws://" + location.host);
+// Initialize connection
+const socket = io({
+    reconnection: false, // Prevent infinite reconnect loop
+    transports: ["websocket"]
+});
 
-// join event when connected
+// Authenticate after connecting
+socket.on("connect", () => {
+    console.log("Connected to WebSocket server.");
+    socket.emit("authenticate", { username });
+});
+
+// Handle disconnection
+socket.on("disconnect", (reason) => {
+    console.log("Disconnected from WebSocket:", reason);
+});
+
+// User joins the chatroom
 socket.on("connect", function () {
-    console.log("Connected to WebSocket server!");
     socket.emit("join", { user: username });
 });
 
-// formatted timestamp
-function getTimestamp() {
-    let now = new Date();
-    return now.toLocaleTimeString();
-}
-
-// incoming messages from the server
-socket.on("message", function (data) {
-    console.log("Received message:", data);
-    appendMessage(data.user, data.msg, false);
-});
-
-// user join notifications
-socket.on("user_joined", function (data) {
-    console.log(data.msg);
-    appendMessage(null, data.msg, true);
-});
-
-// append a message to the chat window
+// Function to append messages to chat window
 function appendMessage(user, msg, isSystemMessage) {
     let messages = document.getElementById("messages");
 
@@ -45,19 +40,27 @@ function appendMessage(user, msg, isSystemMessage) {
     let messageElement = document.createElement("p");
 
     if (isSystemMessage) {
-        // Style for system messages
-        messageElement.style.fontStyle = "italic";
+        messageElement.style.fontStyle = "italic"; // System messages are italic
         messageElement.innerText = msg;
     } else {
-        // Format and display user messages with timestamp
-        let timestamp = getTimestamp();
+        let timestamp = new Date().toLocaleTimeString();
         messageElement.innerText = `[${timestamp}] ${user}: ${msg}`;
     }
 
     messages.appendChild(messageElement);
 }
 
-// Wait for DOM to load before adding event listeners
+// Listen for messages from the server
+socket.on("message", function (data) {
+    appendMessage(data.user, data.msg, false);
+});
+
+// Notify when a user joins
+socket.on("user_joined", function (data) {
+    appendMessage(null, data.msg, true);
+});
+
+// DOM is fully loaded
 document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");
     const charCount = document.getElementById("charCount");
@@ -69,12 +72,13 @@ document.addEventListener("DOMContentLoaded", function () {
         charCount.textContent = `${remaining} characters remaining`;
     });
 
-    // Send message when the "Send" button is clicked
-    document.querySelector("button").addEventListener("click", sendMessage);
+    // Send message when "Send" button is clicked
+    document.getElementById("sendButton").addEventListener("click", sendMessage);
 
-    // Sned message when Enter-key is pressed to send messages
+    // Send message when Enter key is pressed
     messageInput.addEventListener("keypress", function (event) {
         if (event.key === "Enter") {
+            event.preventDefault();
             sendMessage();
         }
     });
@@ -86,8 +90,8 @@ function sendMessage() {
     const message = messageInput.value.trim();
 
     if (message.length > 0) {
-        socket.emit("message", { user: username, msg: message }); // Send message to server
-        messageInput.value = ""; // Clear input field
-        document.getElementById("charCount").textContent = "150 characters remaining"; // Reset character counter
+        socket.emit("message", { user: username, msg: message });
+        messageInput.value = "";
+        document.getElementById("charCount").textContent = "50 characters remaining";
     }
 }

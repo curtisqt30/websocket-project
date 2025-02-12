@@ -1,6 +1,5 @@
 from flask import Flask, render_template, redirect, url_for, request, session, jsonify, copy_current_request_context
 from flask_socketio import SocketIO, emit, join_room, disconnect
-from flask_session import Session
 import json
 import os
 import hashlib
@@ -8,9 +7,9 @@ import hashlib
 # Flask setup
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret-key"
-app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_TYPE"] = "null"
 app.config["SESSION_PERMANENT"] = False
-Session(app)
+app.config["SESSION_FILE_DIR"] = "./flask_session"
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -21,9 +20,15 @@ USER_DB = "users.json"
 # Load users from database
 def load_users():
     if os.path.exists(USER_DB):
-        with open(USER_DB, "r") as file:
-            return json.load(file)
-    return {}
+        try:
+            with open(USER_DB, "r") as file:
+                data = file.read().strip() 
+                if not data:
+                    return {}
+                return json.loads(data)
+        except json.JSONDecodeError:
+            return {}
+    return {} 
 
 # Save users to database
 def save_users(users):
@@ -51,11 +56,13 @@ def login_page():
         users = load_users()
 
         if username in users and users[username] == password:
-            session["username"] = username
-            return redirect(url_for("chat_page"))
-        return render_template("login.html", error="Invalid credentials")
+            session["username"] = username  
+            return jsonify({"success": True})
+        
+        return jsonify({"success": False, "message": "Invalid credentials"})
 
-    return render_template("login.html") 
+    return render_template("login.html")
+
 
 # Registration page
 @app.route("/register", methods=["GET", "POST"])
@@ -84,19 +91,31 @@ def chat_page():
 # Logout
 @app.route("/logout")
 def logout():
-    session.pop("username", None)
-    return redirect(url_for("login_page"))
+    session.pop("username", None) 
+    return redirect(url_for("login_page")) 
 
 # Websocket Events
 @socketio.on("connect")
 def handle_connect():
     if "username" not in session:
-        print("No session found. Disconnecting WebSocket.")
+        print("No session found. Disconnecting.")
         disconnect()
         return
     
-    username = session["username"]
-    print(f"{username} connected via WebSocket.")
+    username = session.get("username", "Guest")
+    print(f"{username} connected.")
+
+    emit("connected", {"user": username})
+
+@socketio.on("authenticate")
+def handle_auth(data):
+    username = data.get("username")
+    if not username:
+        print("No username provided, disconnecting.")
+        disconnect()
+        return
+    
+    print(f"{username} authenticated.")
 
 @socketio.on("join")
 def handle_join(data):
@@ -119,6 +138,10 @@ def handle_message(data):
 def handle_disconnect():
     if "username" in session:
         print(f"{session['username']} disconnected")
+
+@app.route("/debug-session")
+def debug_session():
+    return jsonify(dict(session))
 
 # Run Flask application
 if __name__ == "__main__":
