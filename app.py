@@ -195,6 +195,6 @@ def force_https():
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
-    print("Starting server with WSS only...")
+    print("Starting server for WSS only...")
     http_server = WSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler, certfile="cert.pem", keyfile="key.pem")
     http_server.serve_forever()
