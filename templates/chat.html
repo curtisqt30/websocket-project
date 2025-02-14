@@ -12,11 +12,13 @@
         <div class="panel chat-panel">
             <h1>Chatroom</h1>
             <div id="messages"></div>
-            
+
             <input type="text" id="messageInput" placeholder="Type a message..." maxlength="50">
-            <button onclick="sendMessage()">Send</button> 
+            <button id="sendButton">Send</button> 
 
             <p id="charCount">50 characters remaining</p>
+
+            <button id="leaveChat">Leave Chat</button>
         </div>
     </div>
     <script src="{{ url_for('static', filename='client.js') }}"></script>

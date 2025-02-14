@@ -23,6 +23,11 @@ socket.on("disconnect", (reason) => {
     console.log("Disconnected from WebSocket:", reason);
 });
 
+// Alert message rate limit
+socket.on("rate_limit", function (data) {
+    alert(data.msg);
+});
+
 // User joins the chatroom
 socket.on("connect", function () {
     socket.emit("join", { user: username });
@@ -64,6 +69,7 @@ socket.on("user_joined", function (data) {
 document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");
     const charCount = document.getElementById("charCount");
+    const leaveChatButton = document.getElementById("leaveChat");
     const maxChars = 50;
 
     // Update character count as the user types
@@ -82,16 +88,36 @@ document.addEventListener("DOMContentLoaded", function () {
             sendMessage();
         }
     });
+
+    // Leave chat button event
+    leaveChatButton.addEventListener("click", function () {
+        socket.emit("leave", { user: username });
+        sessionStorage.removeItem("username");
+        window.location.href = "/logout";
+    });
 });
 
-// Function to send a message
+// Function to send a message with a 1-second cooldown.
+let lastMessageTime = 0;
+
 function sendMessage() {
     const messageInput = document.getElementById("messageInput");
-    const message = messageInput.value.trim();
+    let message = messageInput.value.trim();
 
-    if (message.length > 0) {
-        socket.emit("message", { user: username, msg: message });
-        messageInput.value = "";
-        document.getElementById("charCount").textContent = "50 characters remaining";
+    if (message.length === 0) return;
+    if (message.length > 50) {
+        alert("Message cannot exceed 50 characters!");
+        return;
     }
+
+    let now = Date.now();
+    if (now - lastMessageTime < 1000) {
+        alert("You're sending messages too fast! Please wait.");
+        return;
+    }
+
+    lastMessageTime = now;
+    socket.emit("message", { user: username, msg: message });
+    messageInput.value = "";
+    document.getElementById("charCount").textContent = "50 characters remaining";
 }

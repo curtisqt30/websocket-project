@@ -3,6 +3,7 @@ from flask_socketio import SocketIO, emit, join_room, disconnect
 import json
 import os
 import hashlib
+import time
 
 # Flask setup
 app = Flask(__name__)
@@ -16,6 +17,9 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 
 # User database
 USER_DB = "users.json"
+
+# Store the last message timestamp for each user
+user_last_message_time = {}
 
 # Load users from database
 def load_users():
@@ -125,12 +129,29 @@ def handle_join(data):
     join_room("chatroom")
     emit("user_joined", {"msg": f"{username} joined the chat"}, room="chatroom")
 
+import time
+
+# Store the last message timestamp for each user
+user_last_message_time = {}
+
 @socketio.on("message")
 def handle_message(data):
+    global user_last_message_time
+
     if "username" not in session:
         return
+    
     user = session.get("username", "Guest")
-    msg = data.get("msg")[:50]  # Limit messages to 50 characters
+    msg = data.get("msg", "")[:50]  # Limit messages to 50 characters
+
+    now = time.time()
+
+    # Check if sending messages too fast
+    if user in user_last_message_time and now - user_last_message_time[user] < 1:  # 1-second 
+        emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
+        return
+    
+    user_last_message_time[user] = now 
     print(f"Received message from {user}: {msg}")
     emit("message", {"user": user, "msg": msg}, broadcast=True)
 
@@ -138,6 +159,12 @@ def handle_message(data):
 def handle_disconnect():
     if "username" in session:
         print(f"{session['username']} disconnected")
+
+@socketio.on("leave")
+def handle_leave(data):
+    username = data.get("user", "Guest")
+    emit("user_left", {"msg": f"{username} has left the chat"}, room="chatroom")
+    disconnect()
 
 @app.route("/debug-session")
 def debug_session():
