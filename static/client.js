@@ -7,8 +7,8 @@ if (!username) {
 }
 
 // Initialize connection
-const socket = io({
-    reconnection: false, // Prevent infinite reconnect loop
+const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+const socket = io("wss://localhost:5000", {
     transports: ["websocket"]
 });
 
