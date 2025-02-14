@@ -33,6 +33,18 @@ socket.on("connect", function () {
     socket.emit("join", { user: username });
 });
 
+// Handle inactivity warning
+socket.on("inactivity_warning", function (data) {
+    alert(data.msg);
+});
+
+// Handle forced disconnection
+socket.on("force_disconnect", function (data) {
+    alert(data.msg);
+    socket.disconnect();
+    window.location.href = "/logout";
+});
+
 // Function to append messages to chat window
 function appendMessage(user, msg, isSystemMessage) {
     let messages = document.getElementById("messages");
@@ -45,7 +57,7 @@ function appendMessage(user, msg, isSystemMessage) {
     let messageElement = document.createElement("p");
 
     if (isSystemMessage) {
-        messageElement.style.fontStyle = "italic"; // System messages are italic
+        messageElement.style.fontStyle = "italic";
         messageElement.innerText = msg;
     } else {
         let timestamp = new Date().toLocaleTimeString();

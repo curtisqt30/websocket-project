@@ -8,6 +8,7 @@ from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_session import Session
 from gevent.pywsgi import WSGIServer
 from geventwebsocket.handler import WebSocketHandler
+from threading import Thread
 
 # Flask setup
 app = Flask(__name__)
@@ -22,15 +23,17 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ssl_context.load_cert_chain("cert.pem", "key.pem")
 
-# User database (stored as JSON)
+# User database
 USER_DB = "users.json"
 
-# Store the last message timestamp for each user (rate-limiting)
+# Store the last message timestamp for each user
 user_last_message_time = {}
+
+INACTIVITY_WARNING = 20
+INACTIVITY_DISCONNECT = 30
 
 # ----- Helper Functions -----
 def load_users():
-    """Load users from JSON file."""
     if os.path.exists(USER_DB):
         try:
             with open(USER_DB, "r") as file:
@@ -43,25 +46,39 @@ def load_users():
     return {}
 
 def save_users(users):
-    """Save users to JSON file."""
     with open(USER_DB, "w") as file:
         json.dump(users, file, indent=4)
 
 def hash_password(password):
-    """Hash passwords using SHA-256."""
     return hashlib.sha256(password.encode()).hexdigest()
+
+# Function to monitor activity (heartbeat)
+def monitor_inactivity():
+    """Monitor inactive users and disconnect if no response."""
+    while True:
+        now = time.time()
+        for sid, last_msg_time in list(user_last_message_time.items()):
+            if now - last_msg_time > INACTIVITY_WARNING and now - last_msg_time < INACTIVITY_DISCONNECT:
+                socketio.emit("inactivity_warning", {"msg": "You’ve been inactive. Send a message to stay connected."}, room=sid)
+            if now - last_msg_time > INACTIVITY_DISCONNECT:
+                print(f"User {sid} has been inactive for too long. Disconnecting...")
+                socketio.emit("force_disconnect", {"msg": "You have been disconnected due to inactivity."}, room=sid)
+                socketio.server.disconnect(sid) 
+                del user_last_message_time[sid]
+        time.sleep(5)
+
+# Start monitoring inactivity in the background
+Thread(target=monitor_inactivity, daemon=True).start()
 
 # ----- Routes -----
 @app.route("/")
 def home():
-    """Redirect to chat if logged in, else go to login."""
     if "username" in session:
         return redirect(url_for("chat_page"))
     return redirect(url_for("login_page"))
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
-    """Login endpoint."""
     if request.method == "POST":
         username = request.form["username"]
         password = hash_password(request.form["password"])
@@ -77,7 +94,6 @@ def login_page():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    """User registration endpoint."""
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
@@ -94,33 +110,30 @@ def register():
 
 @app.route("/chat")
 def chat_page():
-    """Chat page (requires login)."""
     if "username" not in session:
         return redirect(url_for("login_page"))
     return render_template("chat.html")
 
 @app.route("/logout")
 def logout():
-    """Log out user."""
     session.pop("username", None)
     return redirect(url_for("login_page"))
 
 # ----- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
-    """Handle new WebSocket connections."""
     if "username" not in session:
-        print("No session found. Disconnecting WebSocket.")
+        print("No session found. Disconnecting.")
         disconnect()
         return
 
+    user_last_message_time[request.sid] = time.time()
     username = session.get("username", "Guest")
-    print(f"{username} connected via WebSocket.")
+    print(f"{username} connected.")
     emit("connected", {"user": username})
 
 @socketio.on("authenticate")
 def handle_auth(data):
-    """Handle user authentication."""
     username = data.get("username")
     if not username:
         print("No username provided, disconnecting.")
@@ -131,7 +144,6 @@ def handle_auth(data):
 
 @socketio.on("join")
 def handle_join(data):
-    """Handle user joining the chatroom."""
     if "username" not in session:
         return
 
@@ -141,7 +153,6 @@ def handle_join(data):
 
 @socketio.on("message")
 def handle_message(data):
-    """Handle incoming chat messages (rate-limited)."""
     global user_last_message_time
 
     if "username" not in session:
@@ -157,19 +168,18 @@ def handle_message(data):
         emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
         return
 
+    user_last_message_time[request.sid] = time.time()
     user_last_message_time[user] = now
     print(f"Received message from {user}: {msg}")
     emit("message", {"user": user, "msg": msg}, broadcast=True)
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    """Handle user disconnection."""
     if "username" in session:
         print(f"{session['username']} disconnected")
 
 @socketio.on("leave")
 def handle_leave(data):
-    """Handle user leaving the chat."""
     username = data.get("user", "Guest")
     emit("user_left", {"msg": f"{username} has left the chat"}, room="chatroom")
     disconnect()
@@ -177,7 +187,6 @@ def handle_leave(data):
 # ----- Enforce HTTPS & WSS Only -----
 @app.before_request
 def force_https():
-    """Redirect HTTP to HTTPS and block non-secure WebSockets."""
     if request.headers.get("Upgrade", "").lower() == "websocket":
         if request.scheme != "https":
             return "WebSockets must use wss://", 403  # Block ws://
