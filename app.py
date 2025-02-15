@@ -52,7 +52,7 @@ def save_users(users):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Function to monitor activity (heartbeat)
+# Function to monitor activity 
 def monitor_inactivity():
     """Monitor inactive users and disconnect if no response."""
     while True:
@@ -67,7 +67,7 @@ def monitor_inactivity():
                 del user_last_message_time[sid]
         time.sleep(5)
 
-# Start monitoring inactivity in the background
+# Start monitoring for inactivity in the background
 Thread(target=monitor_inactivity, daemon=True).start()
 
 # ----- Routes -----
@@ -151,6 +151,8 @@ def handle_join(data):
     join_room("chatroom")
     emit("user_joined", {"msg": f"{username} joined the chat"}, room="chatroom")
 
+# Limit messages to 50 characters
+# Check rate-limit (1 message per second)
 @socketio.on("message")
 def handle_message(data):
     global user_last_message_time
@@ -159,11 +161,10 @@ def handle_message(data):
         return
 
     user = session.get("username", "Guest")
-    msg = data.get("msg", "")[:50]  # Limit messages to 50 characters
+    msg = data.get("msg", "")[:50]
 
     now = time.time()
 
-    # Check rate-limit (1 message per second)
     if user in user_last_message_time and now - user_last_message_time[user] < 1:
         emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
         return
@@ -189,12 +190,12 @@ def handle_leave(data):
 def force_https():
     if request.headers.get("Upgrade", "").lower() == "websocket":
         if request.scheme != "https":
-            return "WebSockets must use wss://", 403  # Block ws://
+            return "WebSockets must use wss://", 403
     elif not request.is_secure:
         return redirect(request.url.replace("http://", "https://", 1), code=301)
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
-    print("Starting server for WSS only...")
+    print("Starting server for WSS connections only...")
     http_server = WSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler, certfile="cert.pem", keyfile="key.pem")
     http_server.serve_forever()
