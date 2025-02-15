@@ -29,8 +29,9 @@ USER_DB = "users.json"
 # Store the last message timestamp for each user
 user_last_message_time = {}
 
-INACTIVITY_WARNING = 20
-INACTIVITY_DISCONNECT = 30
+# Session Timeout
+INACTIVITY_WARNING = 20 # 20 seconds for warning
+INACTIVITY_DISCONNECT = 30 # 30 seconds for forceful disconnection
 
 # ----- Helper Functions -----
 def load_users():
@@ -54,7 +55,6 @@ def hash_password(password):
 
 # Function to monitor activity 
 def monitor_inactivity():
-    """Monitor inactive users and disconnect if no response."""
     while True:
         now = time.time()
         for sid, last_msg_time in list(user_last_message_time.items()):
