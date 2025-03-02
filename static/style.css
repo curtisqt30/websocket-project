@@ -40,19 +40,22 @@ body {
 }
 
 input {
-    width: 90%;
+    width: calc(100% - 20px);
     padding: 10px;
-    margin-bottom: 10px;
+    margin: 10px 0;
+    border: 1px solid #ccc;
+    border-radius: 5px;
 }
 
 button {
     width: 100%;
     padding: 10px;
-    cursor: pointer;
-    background-color: #007BFF;
+    background: #007bff;
     color: white;
     border: none;
     border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
 }
 
 button:hover {
@@ -68,3 +71,6 @@ button:hover {
     background-color: darkred;
 }
 
+p {
+    margin-top: 15px;
+}

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rooms</title>
+    <link rel="stylesheet" href="../static/style.css">
+    <!-- <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> -->
+</head>
+<body>
+    <div class="container">
+        <div class="panel">
+            <h1>Join or Create a Room</h1>
+
+            <button id="createRoom">Create a Room</button>
+            
+            <hr> 
+
+            <input type="text" id="roomCode" placeholder="Enter Room Code">
+            <button id="joinRoom">Join a Room</button>
+
+            <p><a href="/logout">Logout</a></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById("createRoom").addEventListener("click", function() {
+            fetch("/create-room", { method: "POST" })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = "/chat?room=" + data.room;
+                    } else {
+                        alert("Failed to create room.");
+                    }
+                });
+        });
+
+        document.getElementById("joinRoom").addEventListener("click", function() {
+            const roomCode = document.getElementById("roomCode").value.trim();
+            if (roomCode) {
+                window.location.href = "/chat?room=" + roomCode;
+            } else {
+                alert("Please enter a valid room code.");
+            }
+        });
+    </script>
+</body>
+</html>

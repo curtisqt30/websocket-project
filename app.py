@@ -9,6 +9,8 @@ from flask_session import Session
 from gevent.pywsgi import WSGIServer
 from geventwebsocket.handler import WebSocketHandler
 from threading import Thread
+import random
+import string
 
 # Flask setup
 app = Flask(__name__)
@@ -31,6 +33,9 @@ user_last_message_time = {}
 
 INACTIVITY_WARNING = 20
 INACTIVITY_DISCONNECT = 30
+
+# Store the rooms
+rooms = {}
 
 # ----- Helper Functions -----
 def load_users():
@@ -76,6 +81,18 @@ def home():
     if "username" in session:
         return redirect(url_for("chat_page"))
     return redirect(url_for("login_page"))
+
+# Finish implemnting these
+
+def generate_room():
+    pass
+
+
+@app.route("/create-room", methods=["GET", "POST"])
+def create_room()
+    if "username" in session:
+        pass
+#-----------------
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
@@ -197,4 +214,4 @@ def force_https():
 if __name__ == "__main__":
     print("Starting server for WSS only...")
     http_server = WSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler, certfile="cert.pem", keyfile="key.pem")
-    http_server.serve_forever()
+    http_server.serve_forever()#-----------------
