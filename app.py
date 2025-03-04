@@ -197,6 +197,8 @@ def handle_join(data):
     print(f"[ROOM={room_code}] {username} joined.")
     emit("user_joined", {"msg": f"{username} joined the chat", "room": room_code}, room=room_code)
 
+# Limit messages to 50 characters
+# Check rate-limit (1 message per second)
 @socketio.on("message")
 def handle_message(data):
     global user_last_message_time
