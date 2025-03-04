@@ -11,6 +11,8 @@ from geventwebsocket.handler import WebSocketHandler
 from threading import Thread
 import random
 import string
+import logging
+import socket
 
 # Flask setup
 app = Flask(__name__)
@@ -18,12 +20,23 @@ app.config["SECRET_KEY"] = "secret-key"
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
+# logging w/ filtering
+logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.getLogger("gevent.ssl").setLevel(logging.ERROR)
+logging.getLogger("engineio.server").setLevel(logging.CRITICAL)
+logging.getLogger("socketio").setLevel(logging.CRITICAL)
+
 # Initialize WebSocket with Flask-SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
 
-# Load SSL certs
-ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+# SSL Setup
+ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
 ssl_context.load_cert_chain("cert.pem", "key.pem")
+ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2  # Enforce TLS 1.2+
+ssl_context.set_ciphers("HIGH:!aNULL:!MD5:!RC4")
+
+# limit ssl errors atleats 1 per second
+last_ssl_error_time = 0
 
 # User database
 USER_DB = "users.json"
@@ -31,13 +44,15 @@ USER_DB = "users.json"
 # Store the last message timestamp for each user
 user_last_message_time = {}
 
-INACTIVITY_WARNING = 20
-INACTIVITY_DISCONNECT = 30
+# ----- Helper Functions -----
 
-# Store the rooms
+# Active rooms
 rooms = {}
 
-# ----- Helper Functions -----
+def generate_room():
+    # generate 4 character room id
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+
 def load_users():
     if os.path.exists(USER_DB):
         try:
@@ -57,42 +72,52 @@ def save_users(users):
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-# Function to monitor activity (heartbeat)
 def monitor_inactivity():
-    """Monitor inactive users and disconnect if no response."""
     while True:
         now = time.time()
         for sid, last_msg_time in list(user_last_message_time.items()):
-            if now - last_msg_time > INACTIVITY_WARNING and now - last_msg_time < INACTIVITY_DISCONNECT:
-                socketio.emit("inactivity_warning", {"msg": "You’ve been inactive. Send a message to stay connected."}, room=sid)
-            if now - last_msg_time > INACTIVITY_DISCONNECT:
-                print(f"User {sid} has been inactive for too long. Disconnecting...")
+            if now - last_msg_time > 120: 
                 socketio.emit("force_disconnect", {"msg": "You have been disconnected due to inactivity."}, room=sid)
-                socketio.server.disconnect(sid) 
+                socketio.server.disconnect(sid)
                 del user_last_message_time[sid]
         time.sleep(5)
 
-# Start monitoring inactivity in the background
 Thread(target=monitor_inactivity, daemon=True).start()
+user_last_message_time = {}
 
 # ----- Routes -----
 @app.route("/")
 def home():
-    if "username" in session:
-        return redirect(url_for("chat_page"))
-    return redirect(url_for("login_page"))
+    if "username" not in session:
+        return redirect(url_for("login_page"))
+    return redirect(url_for("rooms_page"))
 
-# Finish implemnting these
+@app.route("/rooms")
+def rooms_page():
+    if "username" not in session:
+        return redirect(url_for("login_page"))
+    return render_template("rooms.html")
 
-def generate_room():
-    pass
+# create a new room and reuturn the room id
+@app.route("/create-room", methods=["POST"])
+def create_room():
+    if "username" not in session:
+        return redirect(url_for("login_page"))
+    room_code = generate_room()
+    # make sure that there are no duplicate room ids
+    while room_code in rooms:
+        room_code = generate_room()
+    rooms[room_code] = {"users": []}
+    return jsonify({"success": True, "room": room_code})
 
-
-@app.route("/create-room", methods=["GET", "POST"])
-def create_room()
-    if "username" in session:
-        pass
-#-----------------
+@app.route("/join-room")
+def join_room_route():
+    if "username" not in session:
+        return redirect(url_for("login_page"))
+    room_code = request.args.get("room")
+    if not room_code or room_code not in rooms:
+        return redirect(url_for("rooms_page"))
+    return redirect(f"/chat?room={room_code}")
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
@@ -100,13 +125,11 @@ def login_page():
         username = request.form["username"]
         password = hash_password(request.form["password"])
         users = load_users()
-
         if username in users and users[username] == password:
             session["username"] = username
+            print(f"[LOGIN] {username} successfully logged in.")
             return jsonify({"success": True})
-
         return jsonify({"success": False, "message": "Invalid credentials"})
-
     return render_template("login.html")
 
 @app.route("/register", methods=["GET", "POST"])
@@ -115,21 +138,21 @@ def register():
         username = request.form["username"]
         password = request.form["password"]
         users = load_users()
-
         if username in users:
             return render_template("register.html", error="Username already taken")
-
         users[username] = hash_password(password)
         save_users(users)
         return redirect(url_for("login_page"))
-
     return render_template("register.html")
 
 @app.route("/chat")
 def chat_page():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    return render_template("chat.html")
+    room = request.args.get("room", "")
+    if not room or room not in rooms:
+        return redirect(url_for("rooms_page"))
+    return render_template("chat.html", room=room)
 
 @app.route("/logout")
 def logout():
@@ -139,14 +162,17 @@ def logout():
 # ----- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
+    if request.environ.get("wsgi.url_scheme", "") == "ws":
+        print("[SECURITY] Blocked invalid ws:// connection attempt before SSL handshake.")
+        disconnect()
+        return
     if "username" not in session:
         print("No session found. Disconnecting.")
         disconnect()
         return
-
     user_last_message_time[request.sid] = time.time()
     username = session.get("username", "Guest")
-    print(f"{username} connected.")
+    print(f"[USER CONNECT] {username} connected & authenticated.")
     emit("connected", {"user": username})
 
 @socketio.on("authenticate")
@@ -157,38 +183,40 @@ def handle_auth(data):
         disconnect()
         return
 
-    print(f"{username} authenticated.")
-
 @socketio.on("join")
 def handle_join(data):
     if "username" not in session:
         return
-
-    username = session.get("username", "Guest")
-    join_room("chatroom")
-    emit("user_joined", {"msg": f"{username} joined the chat"}, room="chatroom")
+    username = session["username"]
+    room_code = data.get("room", "").strip().upper()
+    if room_code not in rooms:
+        print(f"[ERROR] Room {room_code} doesn't exist.")
+        return
+    join_room(room_code)
+    rooms[room_code]["users"].append(username)
+    print(f"[ROOM={room_code}] {username} joined.")
+    emit("user_joined", {"msg": f"{username} joined the chat", "room": room_code}, room=room_code)
 
 @socketio.on("message")
 def handle_message(data):
     global user_last_message_time
-
     if "username" not in session:
         return
-
     user = session.get("username", "Guest")
-    msg = data.get("msg", "")[:50]  # Limit messages to 50 characters
-
-    now = time.time()
-
-    # Check rate-limit (1 message per second)
-    if user in user_last_message_time and now - user_last_message_time[user] < 1:
-        emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
+    msg = data.get("msg", "")[:50] # Limit messages to 50 characters
+    room_code = data.get("room", "").strip().upper()
+    if room_code not in rooms:
+        print(f"[ERROR] Room {room_code} doesn't exist.")
         return
-
-    user_last_message_time[request.sid] = time.time()
-    user_last_message_time[user] = now
-    print(f"Received message from {user}: {msg}")
-    emit("message", {"user": user, "msg": msg}, broadcast=True)
+    now = time.time()
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Check rate-limit (1 message per second)
+    if request.sid in user_last_message_time and now - user_last_message_time[request.sid] < 1:
+        emit("rate_limit", {"msg": "You're sending messages too fast Please wait."}, room=request.sid)
+        return
+    user_last_message_time[request.sid] = now
+    print(f"[ROOM={room_code}, {timestamp}] {user}: {msg}")
+    emit("message", {"user": user, "msg": msg, "room": room_code}, room=room_code)
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -201,17 +229,45 @@ def handle_leave(data):
     emit("user_left", {"msg": f"{username} has left the chat"}, room="chatroom")
     disconnect()
 
-# ----- Enforce HTTPS & WSS Only -----
+@socketio.on_error_default
+def websocket_error_handler(e):
+    if isinstance(e, ssl.SSLError) and "HTTP_REQUEST" in str(e):
+        return 
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    logging.error(f"[ERROR] {str(e)}")
+    return "An err # Log the error without stack traceor occurred", 500
+
 @app.before_request
 def force_https():
-    if request.headers.get("Upgrade", "").lower() == "websocket":
-        if request.scheme != "https":
-            return "WebSockets must use wss://", 403  # Block ws://
-    elif not request.is_secure:
-        return redirect(request.url.replace("http://", "https://", 1), code=301)
+    if request.url.startswith("http://"):
+        return "This server only accepts HTTPS connections.", 403  # Forbidden
+
+# Custom Gevent WSGIServer
+class SecureWSGIServer(WSGIServer):
+    def wrap_socket_and_handle(self, client_socket, address):
+        global last_ssl_error_time
+        try:
+            peek = client_socket.recv(5, socket.MSG_PEEK) 
+            if peek.startswith(b"GET /") or peek.startswith(b"POST "):
+                now = time.time()
+                if now - last_ssl_error_time > 1: 
+                    print("[SECURITY] Dropped invalid HTTP request on HTTPS socket.")
+                    last_ssl_error_time = now
+                client_socket.close()
+                return
+            
+            super().wrap_socket_and_handle(client_socket, address)
+        except Exception as e:
+            now = time.time()
+            if now - last_ssl_error_time > 1: 
+                print(f"[SECURITY] SSL Error: {e}")
+                last_ssl_error_time = now
+            client_socket.close()
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
     print("Starting server for WSS only...")
-    http_server = WSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler, certfile="cert.pem", keyfile="key.pem")
-    http_server.serve_forever()#-----------------
+    http_server = SecureWSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler, certfile="cert.pem", keyfile="key.pem")
+    http_server.serve_forever()

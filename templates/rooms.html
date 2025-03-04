@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rooms</title>
-    <link rel="stylesheet" href="../static/style.css">
-    <!-- <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"> -->
+    <!-- <link rel="stylesheet" href="../static/style.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
     <div class="container">
@@ -14,36 +14,33 @@
 
             <button id="createRoom">Create a Room</button>
             
-            <hr> 
+            <hr>
 
-            <input type="text" id="roomCode" placeholder="Enter Room Code">
+            <input type="text" id="roomCode" placeholder="Enter Room Code" maxlength="4">
             <button id="joinRoom">Join a Room</button>
 
             <p><a href="/logout">Logout</a></p>
         </div>
     </div>
-
     <script>
         document.getElementById("createRoom").addEventListener("click", function() {
-            fetch("/create-room", { method: "POST" })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        window.location.href = "/chat?room=" + data.room;
-                    } else {
-                        alert("Failed to create room.");
-                    }
-                });
+            fetch("/create-room", { 
+                method: "POST",
+                headers: { "Content-Type": "application/json" }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = "/chat?room=" + data.room;  // Redirect to chat
+                } else {
+                    alert("Error creating room: " + data.message);
+                }
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                alert("Failed to create room.");
+            });
         });
-
-        document.getElementById("joinRoom").addEventListener("click", function() {
-            const roomCode = document.getElementById("roomCode").value.trim();
-            if (roomCode) {
-                window.location.href = "/chat?room=" + roomCode;
-            } else {
-                alert("Please enter a valid room code.");
-            }
-        });
-    </script>
+    </script>    
 </body>
 </html>

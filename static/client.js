@@ -1,5 +1,6 @@
 // Get username from sessionStorage
 let username = sessionStorage.getItem("username");
+let room = new URLSearchParams(window.location.search).get("room");
 
 // Redirect to login page if no username
 if (!username) {
@@ -14,8 +15,12 @@ const socket = io("wss://localhost:5000", {
 
 // Authenticate after connecting
 socket.on("connect", () => {
-    console.log("Connected to WebSocket server.");
+    console.log("Connected as ${username}");
     socket.emit("authenticate", { username });
+    if (room) {
+        socket.emit("join", { room: room });
+        document.getElementById("roomId").innerText = room;
+    }
 });
 
 // Handle disconnection
@@ -28,15 +33,18 @@ socket.on("rate_limit", function (data) {
     alert(data.msg);
 });
 
-// User joins the chatroom
+// System message notify that User joins the chatroom
 socket.on("connect", function () {
-    socket.emit("join", { user: username });
+    const roomId = sessionStorage.getItem("room");
+    socket.emit("join", { user: username, room: roomId });
 });
 
-// Handle inactivity warning
-socket.on("inactivity_warning", function (data) {
-    alert(data.msg);
-});
+// // Handle inactivity warning
+// socket.on("inactivity_warning", function (data) {
+//     alert(data.msg);
+// });     alert(data.msg);
+// });
+
 
 // Handle forced disconnection
 socket.on("force_disconnect", function (data) {
@@ -46,14 +54,8 @@ socket.on("force_disconnect", function (data) {
 });
 
 // Function to append messages to chat window
-function appendMessage(user, msg, isSystemMessage) {
+function appendMessage(user, msg, isSystemMessage = false) {
     let messages = document.getElementById("messages");
-
-    if (!messages) {
-        console.error("Message container not found!");
-        return;
-    }
-
     let messageElement = document.createElement("p");
 
     if (isSystemMessage) {
@@ -67,12 +69,12 @@ function appendMessage(user, msg, isSystemMessage) {
     messages.appendChild(messageElement);
 }
 
-// Listen for messages from the server
-socket.on("message", function (data) {
-    appendMessage(data.user, data.msg, false);
+// Handle incoming messages
+socket.on("message", (data) => {
+    appendMessage(data.user, data.msg);
 });
 
-// Notify when a user joins
+// System message notify when a user joins
 socket.on("user_joined", function (data) {
     appendMessage(null, data.msg, true);
 });
@@ -100,16 +102,15 @@ document.addEventListener("DOMContentLoaded", function () {
             sendMessage();
         }
     });
-
     // Leave chat button event
     leaveChatButton.addEventListener("click", function () {
-        socket.emit("leave", { user: username });
+        socket.emit("leave", { room: room, user: username });
         sessionStorage.removeItem("username");
         window.location.href = "/logout";
     });
 });
 
-// Function to send a message with a 1-second cooldown.
+// Send a message with a 1 second cooldown.
 let lastMessageTime = 0;
 
 function sendMessage() {
@@ -129,7 +130,11 @@ function sendMessage() {
     }
 
     lastMessageTime = now;
-    socket.emit("message", { user: username, msg: message });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomId = urlParams.get("room") || "Unknown";
+
+    socket.emit("message", { user: username, msg: message, room: roomId });
     messageInput.value = "";
     document.getElementById("charCount").textContent = "50 characters remaining";
 }
