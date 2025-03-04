@@ -244,7 +244,7 @@ def handle_exception(e):
 @app.before_request
 def force_https():
     if request.url.startswith("http://"):
-        return "This server only accepts HTTPS connections.", 403  # Forbidden
+        return "This server only accepts HTTPS connections.", 403
 
 # Custom Gevent WSGIServer
 class SecureWSGIServer(WSGIServer):
