@@ -162,18 +162,12 @@ def logout():
 # ----- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
-    if request.environ.get("wsgi.url_scheme", "") == "ws":
-        print("[SECURITY] Blocked invalid ws:// connection attempt before SSL handshake.")
+    if "username" in session:
+        username = session["username"]
+        print(f"[USER CONNECTED] {username}")
+    else:
+        print("[USER CONNECTED] Guest Connected")
         disconnect()
-        return
-    if "username" not in session:
-        print("No session found. Disconnecting.")
-        disconnect()
-        return
-    user_last_message_time[request.sid] = time.time()
-    username = session.get("username", "Guest")
-    print(f"[USER CONNECT] {username} connected & authenticated.")
-    emit("connected", {"user": username})
 
 @socketio.on("authenticate")
 def handle_auth(data):
@@ -185,17 +179,15 @@ def handle_auth(data):
 
 @socketio.on("join")
 def handle_join(data):
-    if "username" not in session:
-        return
-    username = session["username"]
     room_code = data.get("room", "").strip().upper()
-    if room_code not in rooms:
+    username = session.get("username", "Guest")
+    if room_code in rooms:
+        join_room(room_code)
+        rooms[room_code]["users"].append(username)
+        print(f"[ROOM={room_code}] {username} joined.")
+        emit("user_joined", {"msg": f"{username} joined the chat"}, room=room_code)
+    else:
         print(f"[ERROR] Room {room_code} doesn't exist.")
-        return
-    join_room(room_code)
-    rooms[room_code]["users"].append(username)
-    print(f"[ROOM={room_code}] {username} joined.")
-    emit("user_joined", {"msg": f"{username} joined the chat", "room": room_code}, room=room_code)
 
 # Limit messages to 50 characters
 # Check rate-limit (1 message per second)
