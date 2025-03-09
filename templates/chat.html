@@ -25,9 +25,9 @@
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const urlParams = new URLSearchParams(window.location.search);
-            const roomId = urlParams.get("room") || "Unknown";
-            document.getElementById("roomId").textContent = roomId;
-            sessionStorage.setItem("room", roomId);
+            const room = urlParams.get("room") || "Unknown";
+            document.getElementById("roomId").textContent = room;
+            sessionStorage.setItem("room", room);
         });
     </script>
 

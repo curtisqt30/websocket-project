@@ -26,20 +26,29 @@
         document.getElementById("createRoom").addEventListener("click", function() {
             fetch("/create-room", { 
                 method: "POST",
-                headers: { "Content-Type": "application/json" }
+                headers: { 
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                }
             })
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    window.location.href = "/chat?room=" + data.room;  // Redirect to chat
+                    window.location.href = `/chat?roomId=${data.roomId}`;
                 } else {
                     alert("Error creating room: " + data.message);
                 }
             })
-            .catch(error => {
-                console.error("Error:", error);
-                alert("Failed to create room.");
-            });
+            .catch(err => console.error("Error:", err));
+        });
+
+        document.getElementById("joinRoom").addEventListener("click", function() {
+            const roomId = document.getElementById("roomCode").value.trim().toUpperCase();
+            if (roomId.length === 4) {
+                window.location.href = `/chat?roomId=${roomId}`;
+            } else {
+                alert("Enter a valid 4-character room ID.");
+            }
         });
     </script>    
 </body>

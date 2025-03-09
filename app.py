@@ -13,6 +13,8 @@ import random
 import string
 import logging
 import socket
+from datetime import datetime
+from cryptography.fernet import Fernet
 
 # Flask setup
 app = Flask(__name__)
@@ -25,6 +27,10 @@ logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s -
 logging.getLogger("gevent.ssl").setLevel(logging.ERROR)
 logging.getLogger("engineio.server").setLevel(logging.CRITICAL)
 logging.getLogger("socketio").setLevel(logging.CRITICAL)
+
+LOGS_FOLDER = "chat_logs"
+if not os.path.exists(LOGS_FOLDER):
+    os.makedirs(LOGS_FOLDER)
 
 # Initialize WebSocket with Flask-SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
@@ -44,13 +50,42 @@ USER_DB = "users.json"
 # Store the last message timestamp for each user
 user_last_message_time = {}
 
-# ----- Helper Functions -----
-
 # Active rooms
 rooms = {}
 
+# Login page brute force prevention
+failed_login_attempts = {}
+
+IP_BLOCK_DURATION = 300
+MAX_FAILED_ATEMPTS = 3
+
+def is_ip_blocked(ip):
+    if ip in failed_login_attempts:
+        attempts, block_start = failed_login_attempts[ip]
+        if attempts >= MAX_FAILED_ATEMPTS:
+            if time.time() - block_start < IP_BLOCK_DURATION:
+                return True
+            else:
+                del failed_login_attempts[ip]
+    return False
+
+def record_failed_attempt(ip):
+    if ip in failed_login_attempts:
+        failed_login_attempts[ip][0] += 1
+    else:
+        failed_login_attempts[ip] = [1, time.time()]
+
+def get_client_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr)
+
+def log_message(roomId, username, msg):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] {username}: {msg}\n"
+    log_file = os.path.join(LOGS_FOLDER, f"{roomId}.txt")
+    with open(log_file, "a") as file:
+        file.write(log_entry)
+
 def generate_room():
-    # generate 4 character room id
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
 
 def load_users():
@@ -98,37 +133,52 @@ def rooms_page():
         return redirect(url_for("login_page"))
     return render_template("rooms.html")
 
-# create a new room and reuturn the room id
 @app.route("/create-room", methods=["POST"])
 def create_room():
     if "username" not in session:
         return redirect(url_for("login_page"))
     room_code = generate_room()
-    # make sure that there are no duplicate room ids
     while room_code in rooms:
         room_code = generate_room()
     rooms[room_code] = {"users": []}
-    return jsonify({"success": True, "room": room_code})
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] [INFO] Created room {room_code}")
+    return jsonify({"success": True, "roomId": room_code})
 
 @app.route("/join-room")
 def join_room_route():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    room_code = request.args.get("room")
+    room_code = request.args.get("room", "").strip().upper()
     if not room_code or room_code not in rooms:
+        # print(f"[ERROR] Room {room_code} doesn't exist.")
         return redirect(url_for("rooms_page"))
-    return redirect(f"/chat?room={room_code}")
+    # print(f"[INFO] Redirecting to chat room: {room_code}")
+    return render_template("chat.html", roomId=room_code)
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
+    ip = get_client_ip()
+    if is_ip_blocked(ip):
+        return jsonify({
+            "success": False,
+            "message": "Too many failed attempts. Try again in 5 minutes."
+        })
     if request.method == "POST":
         username = request.form["username"]
         password = hash_password(request.form["password"])
         users = load_users()
         if username in users and users[username] == password:
             session["username"] = username
-            print(f"[LOGIN] {username} successfully logged in.")
+            ip = get_client_ip()
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            print(f"[{timestamp}] [LOGIN] {username} successfully logged in. (IP: {ip})")
+            # print(f"[DEBUG] Session after login: {session.get('username')}")
+            if ip in failed_login_attempts:
+                del failed_login_attempts[ip]
             return jsonify({"success": True})
+        record_failed_attempt(ip)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [FAILED LOGIN] IP: {ip} | Failed Attempt #{failed_login_attempts[ip][0]}")
         return jsonify({"success": False, "message": "Invalid credentials"})
     return render_template("login.html")
 
@@ -149,24 +199,32 @@ def register():
 def chat_page():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    room = request.args.get("room", "")
-    if not room or room not in rooms:
+    room_code = request.args.get("roomId", "").strip().upper()
+    if not room_code or room_code not in rooms:
+        # print(f"[ERROR] Room {room_code} doesn't exist.")
         return redirect(url_for("rooms_page"))
-    return render_template("chat.html", room=room)
+    # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # print(f"[{timestamp}] [INFO] Redirecting to chat room: {room_code}")
+    return render_template("chat.html", roomId=room_code)
 
 @app.route("/logout")
 def logout():
+    username = session['username']
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] [LOGOUT] {username} logged out.")
     session.pop("username", None)
     return redirect(url_for("login_page"))
 
 # ----- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
-    if "username" in session:
-        username = session["username"]
-        print(f"[USER CONNECTED] {username}")
-    else:
-        print("[USER CONNECTED] Guest Connected")
+    if "username" not in session:
+    #     username = session["username"]
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    #     print(f"[{timestamp}] [USER CONNECTED] {username}")
+    # else:
+        ip = get_client_ip()
+        print(f"[{timestamp}] [ERROR] Unknown user tried to connect without logging in. (IP: {ip})")
         disconnect()
 
 @socketio.on("authenticate")
@@ -179,48 +237,63 @@ def handle_auth(data):
 
 @socketio.on("join")
 def handle_join(data):
-    room_code = data.get("room", "").strip().upper()
+    roomId = data.get("roomId", "").strip().upper()
     username = session.get("username", "Guest")
-    if room_code in rooms:
-        join_room(room_code)
-        rooms[room_code]["users"].append(username)
-        print(f"[ROOM={room_code}] {username} joined.")
-        emit("user_joined", {"msg": f"{username} joined the chat"}, room=room_code)
-    else:
-        print(f"[ERROR] Room {room_code} doesn't exist.")
+    if roomId in rooms:
+        join_room(roomId)
+        rooms[roomId]["users"].append(username)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] [ROOM={roomId}] {username} joined.")
+        emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
+    # else:
+    #     print(f"[ERROR] Room {roomId} doesn't exist.")
 
 # Limit messages to 50 characters
 # Check rate-limit (1 message per second)
 @socketio.on("message")
 def handle_message(data):
+    # print("[DEBUG] handle_message(): ", data)
     global user_last_message_time
     if "username" not in session:
         return
     user = session.get("username", "Guest")
-    msg = data.get("msg", "")[:50] # Limit messages to 50 characters
-    room_code = data.get("room", "").strip().upper()
-    if room_code not in rooms:
-        print(f"[ERROR] Room {room_code} doesn't exist.")
-        return
+    msg = data.get("msg", "")[:50] 
+    roomId = data.get("roomId", "").strip().upper()
     now = time.time()
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    if roomId not in rooms:
+        print(f"[{timestamp}] [ERROR] Room {roomId} doesn't exist. Available rooms: {list(rooms.keys())}")
+        return
     # Check rate-limit (1 message per second)
     if request.sid in user_last_message_time and now - user_last_message_time[request.sid] < 1:
-        emit("rate_limit", {"msg": "You're sending messages too fast Please wait."}, room=request.sid)
+        emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
         return
     user_last_message_time[request.sid] = now
-    print(f"[ROOM={room_code}, {timestamp}] {user}: {msg}")
-    emit("message", {"user": user, "msg": msg, "room": room_code}, room=room_code)
+    log_message(roomId, user, msg)
+    print(f"[{timestamp}] [ROOM={roomId}] {user}: {msg}")
+    emit("message", {"user": user, "msg": msg, "room": roomId}, room=roomId)
 
 @socketio.on("disconnect")
 def handle_disconnect():
     if "username" in session:
-        print(f"{session['username']} disconnected")
+        username = session['username']
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] [USER DISCONNECTED] {username}")
+        for roomId, data in rooms.items():
+            if username in data["users"]:
+                data["users"].remove(username)
+                print(f"[ROOM={roomId}] {username} left the chat.")
+                emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
 
 @socketio.on("leave")
 def handle_leave(data):
     username = data.get("user", "Guest")
-    emit("user_left", {"msg": f"{username} has left the chat"}, room="chatroom")
+    roomId = data.get("roomId", "").strip().upper()
+    if roomId in rooms and username in rooms[roomId]["users"]:
+        rooms[roomId]["users"].remove(username)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"[{timestamp}] [ROOM={roomId}] {username} left the chat (Leave Button).")
+        emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
     disconnect()
 
 @socketio.on_error_default
@@ -247,7 +320,8 @@ class SecureWSGIServer(WSGIServer):
             if peek.startswith(b"GET /") or peek.startswith(b"POST "):
                 now = time.time()
                 if now - last_ssl_error_time > 1: 
-                    print("[SECURITY] Dropped invalid HTTP request on HTTPS socket.")
+                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    print(f"[{timestamp}] [SECURITY] Dropped invalid HTTP request on HTTPS socket.")
                     last_ssl_error_time = now
                 client_socket.close()
                 return
@@ -256,7 +330,8 @@ class SecureWSGIServer(WSGIServer):
         except Exception as e:
             now = time.time()
             if now - last_ssl_error_time > 1: 
-                print(f"[SECURITY] SSL Error: {e}")
+                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                print(f"[{timestamp}][SECURITY] SSL Error: {e}")
                 last_ssl_error_time = now
             client_socket.close()
 

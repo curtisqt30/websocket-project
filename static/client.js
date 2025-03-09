@@ -1,10 +1,10 @@
 // Get username from sessionStorage
 let username = sessionStorage.getItem("username");
 let urlParams = new URLSearchParams(window.location.search);
-let room = urlParams.get('room');
+let roomId = urlParams.get('roomId');
 
 // Redirect to login page if no username
-if (!username || !room) {
+if (!username || !roomId) {
     window.location.href = "/rooms";
 }
 
@@ -16,12 +16,7 @@ const socket = io("wss://localhost:5000", {
 // Authenticate after connecting
 socket.on("connect", () => {
     socket.emit("authenticate", { username });
-    socket.emit("join", { room });
-});
-
-// Handle disconnection
-socket.on("disconnect", (reason) => {
-    console.log("Disconnected from WebSocket:", reason);
+    socket.emit("join", { roomId });
 });
 
 // Alert message rate limit
@@ -70,7 +65,7 @@ socket.on("user_left", function (data) {
 
 // DOM is fully loaded
 document.addEventListener("DOMContentLoaded", function () {
-    document.getElementById("roomId").textContent = room;
+    document.getElementById("roomId").textContent = roomId;
     
     const messageInput = document.getElementById("messageInput");
     const charCount = document.getElementById("charCount");
@@ -91,7 +86,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
     leaveChatButton.addEventListener("click", function () {
-        socket.emit("leave", { user: username, room });
+        socket.emit("leave", { user: username, roomId });
         window.location.href = "/rooms";
     });
 });
@@ -100,23 +95,26 @@ document.addEventListener("DOMContentLoaded", function () {
 let lastMessageTime = 0;
 
 function sendMessage() {
+    console.log("[DEBUG] sendMessage() triggered");
     const messageInput = document.getElementById("messageInput");
     let message = messageInput.value.trim();
-    const room = urlParams.get("room");
 
-    if (message.length === 0 || message.length > 50) {
+    if (!roomId) {
+        alert("Room ID is missing.");
+        return;
+    }
+    if (!message || message.length > 50) {
         alert("Message must be between 1 and 50 characters.");
         return;
     }
-
     let now = Date.now();
     if (now - lastMessageTime < 1000) {
         alert("You're sending messages too fast! Please wait.");
         return;
     }
-
     lastMessageTime = now;
-    socket.emit("message", { user: username, msg: message, room: room });
+    socket.emit("message", { user: username, msg: message, roomId: roomId });
     messageInput.value = "";
     document.getElementById("charCount").textContent = "50 characters remaining";
 }
+
