@@ -8,7 +8,11 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
+    <div class="wrapper">
+        <div class="banner">
+            <h1>Welcome to CurtisConnect</h1>
+        </div>
+
         <div class="panel">
             <h1>Login</h1>
             <form id="loginForm">
@@ -34,7 +38,7 @@
             .then(data => {
                 if (data.success) {
                     sessionStorage.setItem("username", formData.get("username")); 
-                    window.location.href = "/chat";
+                    window.location.href = "/dashboard";
                 } else {
                     alert(data.message);
                 }

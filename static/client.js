@@ -3,9 +3,11 @@ let username = sessionStorage.getItem("username");
 let urlParams = new URLSearchParams(window.location.search);
 let roomId = urlParams.get('roomId');
 
-// Redirect to login page if no username
-if (!username || !roomId) {
-    window.location.href = "/rooms";
+// Redirect to login if no username
+if (!username) {
+    window.location.href = "/login";
+} else if (!roomId && !window.location.pathname.includes("/dashboard")) {
+    window.location.href = "/dashboard";
 }
 
 // Initialize connection
@@ -19,16 +21,97 @@ socket.on("connect", () => {
     socket.emit("join", { roomId });
 });
 
-// Alert message rate limit
-socket.on("rate_limit", function (data) {
-    alert(data.msg);
-});
+socket.on("rate_limit", (data) => alert(data.msg));
 
-// Handle forced disconnection
-socket.on("force_disconnect", function (data) {
+socket.on("force_disconnect", (data) => {
     alert(data.msg);
     socket.disconnect();
-    window.location.href = "/rooms";
+    window.location.href = "/dashboard";
+});
+
+// Handle incoming messages
+socket.on("message", (data) => appendMessage(data.user, data.msg, false));
+socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
+socket.on("user_left", (data) => appendMessage(null, data.msg, true));
+
+// DOM is fully loaded
+document.addEventListener("DOMContentLoaded", function () {
+    const messageInput = document.getElementById("messageInput");
+    const charCount = document.getElementById("charCount");
+    const sendButton = document.getElementById("sendButton");
+    const roomList = document.getElementById("roomList");
+    const createRoomButton = document.getElementById("createRoom");
+    const joinRoomButton = document.getElementById("joinRoom");
+
+    // Display username on the sidebar
+    const usernameDisplay = document.createElement("p");
+    usernameDisplay.textContent = `User: ${username}`;
+    usernameDisplay.classList.add("username-display");
+    document.querySelector(".sidebar").prepend(usernameDisplay);
+
+    const maxChars = 150;
+    const maxRooms = 5;
+
+    // Room storage
+    const savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
+    savedRooms.forEach(roomId => addRoomToSidebar(roomId));
+
+    // Message input handling
+    messageInput.addEventListener("input", () => {
+        const remaining = maxChars - messageInput.value.length;
+        charCount.textContent = `${remaining} characters remaining`;
+    });
+
+    sendButton.addEventListener("click", sendMessage);
+
+    messageInput.addEventListener("keypress", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            sendMessage();
+        }
+    });
+
+    // room creation/join
+    createRoomButton.addEventListener("click", function () {
+        const savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
+        if (savedRooms.length >= maxRooms) {
+            alert(`You can only have a maximum of ${maxRooms} rooms.`);
+            return;
+        }
+
+        fetch("/create-room", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Requested-With": "XMLHttpRequest"
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                addRoomToSidebar(data.roomId);
+                saveRoom(data.roomId);
+                window.location.href = `/dashboard?roomId=${data.roomId}`;
+            } else {
+                alert("Error creating chat: " + data.message);
+            }
+        });
+    });
+
+    joinRoomButton.addEventListener("click", function () {
+        const roomId = document.getElementById("roomCode").value.trim().toUpperCase();
+        if (roomId.length === 4) {
+            addRoomToSidebar(roomId);
+            saveRoom(roomId);
+            window.location.href = `/dashboard?roomId=${roomId}`;
+        } else {
+            alert("Enter a valid 4-character room ID.");
+        }
+    });
+
+    const room = urlParams.get("roomId") || "None";
+    document.getElementById("roomId").textContent = room;
+    sessionStorage.setItem("room", room);
 });
 
 // Function to append messages to chat window
@@ -48,50 +131,43 @@ function appendMessage(user, msg, isSystemMessage = false) {
     messages.scrollTop = messages.scrollHeight;
 }
 
-// Handle incoming messages
-socket.on("message", function (data) {
-    appendMessage(data.user, data.msg, false);
-});
+function addRoomToSidebar(roomId) {
+    const roomItem = document.createElement("div");
+    roomItem.classList.add("room-item");
 
-// System message notify when a user joins
-socket.on("user_joined", function (data) {
-    appendMessage(null, data.msg, true);
-});
+    const roomText = document.createElement("span");
+    roomText.textContent = `Room: ${roomId}`;
 
-// System message notify when a user leaves
-socket.on("user_left", function (data) {
-    appendMessage(null, data.msg, true);
-});
+    const removeButton = document.createElement("button");
+    removeButton.textContent = "❌";
+    removeButton.classList.add("remove-room-btn");
 
-// DOM is fully loaded
-document.addEventListener("DOMContentLoaded", function () {
-    document.getElementById("roomId").textContent = roomId;
-    
-    const messageInput = document.getElementById("messageInput");
-    const charCount = document.getElementById("charCount");
-    const sendButton = document.getElementById("sendButton");
-    const leaveChatButton = document.getElementById("leaveChat");
-    const maxChars = 50;
-
-    messageInput.addEventListener("input", function () {
-        const remaining = maxChars - messageInput.value.length;
-        charCount.textContent = `${remaining} characters remaining`;
+    removeButton.addEventListener("click", () => {
+        removeRoom(roomId);
+        roomItem.remove();
     });
 
-    sendButton.addEventListener("click", sendMessage);
-    messageInput.addEventListener("keypress", function (event) {
-        if (event.key === "Enter") {
-            event.preventDefault();
-            sendMessage();
-        }
-    });
-    leaveChatButton.addEventListener("click", function () {
-        socket.emit("leave", { user: username, roomId });
-        window.location.href = "/rooms";
-    });
-});
+    roomItem.appendChild(roomText);
+    roomItem.appendChild(removeButton);
+    document.getElementById("roomList").appendChild(roomItem);
+}
 
-// Send a message with a 1 second cooldown.
+// Save room data in sessionStorage
+function saveRoom(roomId) {
+    const savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
+    if (!savedRooms.includes(roomId)) {
+        savedRooms.push(roomId);
+        sessionStorage.setItem("rooms", JSON.stringify(savedRooms));
+    }
+}
+
+// Remove room from sessionStorage
+function removeRoom(roomId) {
+    let savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
+    savedRooms = savedRooms.filter(room => room !== roomId);
+    sessionStorage.setItem("rooms", JSON.stringify(savedRooms));
+}
+
 let lastMessageTime = 0;
 
 function sendMessage() {
@@ -107,14 +183,15 @@ function sendMessage() {
         alert("Message must be between 1 and 50 characters.");
         return;
     }
+
     let now = Date.now();
     if (now - lastMessageTime < 1000) {
         alert("You're sending messages too fast! Please wait.");
         return;
     }
+
     lastMessageTime = now;
     socket.emit("message", { user: username, msg: message, roomId: roomId });
     messageInput.value = "";
     document.getElementById("charCount").textContent = "50 characters remaining";
 }
-

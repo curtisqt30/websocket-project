@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CurtisConnect</title>
+    <!-- <link rel="stylesheet" href="../static/style.css"> -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='client.js') }}"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar for Rooms -->
+        <div class="sidebar">
+            <h2>CurtisConnect</h2>
+
+            <button id="createRoom">Create a Room</button>
+            <input type="text" id="roomCode" placeholder="Enter Room Code" maxlength="4">
+            <button id="joinRoom">Join a Room</button>
+
+            <div class="room-list" id="roomList"></div>
+
+            <p><a href="/logout">Logout</a></p>
+        </div>
+
+        <!-- Main Chat Section -->
+        <div class="main-content">
+            <div class="chat-header">
+                <h1>Chatroom: <span id="roomId">None</span></h1>
+            </div>
+
+            <div id="messages"></div>
+
+            <div class="message-input">
+                <input type="text" id="messageInput" placeholder="Type a message..." maxlength="50">
+                <button id="sendButton">Send</button>
+            </div>
+
+            <p id="charCount">50 characters remaining</p>
+        </div>
+    </div>
+</body>
+</html>

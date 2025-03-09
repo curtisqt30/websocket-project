@@ -120,18 +120,22 @@ def monitor_inactivity():
 Thread(target=monitor_inactivity, daemon=True).start()
 user_last_message_time = {}
 
-# ----- Routes -----
+# --------------------------- Routes -------------------
 @app.route("/")
 def home():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    return redirect(url_for("rooms_page"))
+    return redirect(url_for("dashboard_page"))
 
-@app.route("/rooms")
-def rooms_page():
+@app.route("/dashboard")
+def dashboard_page():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    return render_template("rooms.html")
+    room_code = request.args.get("roomId", "").strip().upper()
+    # when no room ID is in the URL
+    if not room_code:
+        return render_template("dashboard.html", roomId="None")
+    return render_template("dashboard.html", roomId=room_code)
 
 @app.route("/create-room", methods=["POST"])
 def create_room():
@@ -141,8 +145,7 @@ def create_room():
     while room_code in rooms:
         room_code = generate_room()
     rooms[room_code] = {"users": []}
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] [INFO] Created room {room_code}")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] Created room {room_code}")
     return jsonify({"success": True, "roomId": room_code})
 
 @app.route("/join-room")
@@ -151,10 +154,8 @@ def join_room_route():
         return redirect(url_for("login_page"))
     room_code = request.args.get("room", "").strip().upper()
     if not room_code or room_code not in rooms:
-        # print(f"[ERROR] Room {room_code} doesn't exist.")
-        return redirect(url_for("rooms_page"))
-    # print(f"[INFO] Redirecting to chat room: {room_code}")
-    return render_template("chat.html", roomId=room_code)
+        return redirect(url_for("dashboard_page"))
+    return redirect(f"/dashboard?roomId={room_code}")
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
@@ -195,36 +196,19 @@ def register():
         return redirect(url_for("login_page"))
     return render_template("register.html")
 
-@app.route("/chat")
-def chat_page():
-    if "username" not in session:
-        return redirect(url_for("login_page"))
-    room_code = request.args.get("roomId", "").strip().upper()
-    if not room_code or room_code not in rooms:
-        # print(f"[ERROR] Room {room_code} doesn't exist.")
-        return redirect(url_for("rooms_page"))
-    # timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    # print(f"[{timestamp}] [INFO] Redirecting to chat room: {room_code}")
-    return render_template("chat.html", roomId=room_code)
-
 @app.route("/logout")
 def logout():
     username = session['username']
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] [LOGOUT] {username} logged out.")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [LOGOUT] {username} logged out.")
     session.pop("username", None)
     return redirect(url_for("login_page"))
 
-# ----- WebSocket Events -----
+# ----------------------------- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
     if "username" not in session:
-    #     username = session["username"]
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    #     print(f"[{timestamp}] [USER CONNECTED] {username}")
-    # else:
         ip = get_client_ip()
-        print(f"[{timestamp}] [ERROR] Unknown user tried to connect without logging in. (IP: {ip})")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ERROR] Unknown user tried to connect without logging in. (IP: {ip})")
         disconnect()
 
 @socketio.on("authenticate")
@@ -239,50 +223,43 @@ def handle_auth(data):
 def handle_join(data):
     roomId = data.get("roomId", "").strip().upper()
     username = session.get("username", "Guest")
+
     if roomId in rooms:
         join_room(roomId)
         rooms[roomId]["users"].append(username)
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [ROOM={roomId}] {username} joined.")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} joined.")
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
-    # else:
-    #     print(f"[ERROR] Room {roomId} doesn't exist.")
 
-# Limit messages to 50 characters
-# Check rate-limit (1 message per second)
+
 @socketio.on("message")
 def handle_message(data):
-    # print("[DEBUG] handle_message(): ", data)
     global user_last_message_time
     if "username" not in session:
         return
     user = session.get("username", "Guest")
-    msg = data.get("msg", "")[:50] 
+    msg = data.get("msg", "")[:150] 
     roomId = data.get("roomId", "").strip().upper()
-    now = time.time()
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     if roomId not in rooms:
-        print(f"[{timestamp}] [ERROR] Room {roomId} doesn't exist. Available rooms: {list(rooms.keys())}")
+        print(f"[ERROR] Room {roomId} doesn't exist.")
         return
-    # Check rate-limit (1 message per second)
+    # Rate-limit check
+    now = time.time()
     if request.sid in user_last_message_time and now - user_last_message_time[request.sid] < 1:
         emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
         return
     user_last_message_time[request.sid] = now
     log_message(roomId, user, msg)
-    print(f"[{timestamp}] [ROOM={roomId}] {user}: {msg}")
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {user}: {msg}")
     emit("message", {"user": user, "msg": msg, "room": roomId}, room=roomId)
 
 @socketio.on("disconnect")
 def handle_disconnect():
     if "username" in session:
         username = session['username']
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [USER DISCONNECTED] {username}")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [USER DISCONNECTED] {username}")
         for roomId, data in rooms.items():
             if username in data["users"]:
                 data["users"].remove(username)
-                print(f"[ROOM={roomId}] {username} left the chat.")
                 emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
 
 @socketio.on("leave")
@@ -291,8 +268,7 @@ def handle_leave(data):
     roomId = data.get("roomId", "").strip().upper()
     if roomId in rooms and username in rooms[roomId]["users"]:
         rooms[roomId]["users"].remove(username)
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] [ROOM={roomId}] {username} left the chat (Leave Button).")
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} left the chat.")
         emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
     disconnect()
 
