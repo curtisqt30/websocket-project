@@ -11,7 +11,7 @@ if (!username) {
 }
 
 // Initialize connection
-const socket = io("wss://localhost:5000", {
+const socket = io("wss://curtisqt.com", {
     transports: ["websocket"]
 });
 

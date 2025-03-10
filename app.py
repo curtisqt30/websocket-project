@@ -282,10 +282,10 @@ def handle_exception(e):
     logging.error(f"[ERROR] {str(e)}")
     return "An err # Log the error without stack traceor occurred", 500
 
-@app.before_request
-def force_https():
-    if request.url.startswith("http://"):
-        return "This server only accepts HTTPS connections.", 403
+#@app.before_request
+#def force_https():
+#    if request.url.startswith("http://"):
+#        return "This server only accepts HTTPS connections.", 403
 
 # Custom Gevent WSGIServer
 class SecureWSGIServer(WSGIServer):
@@ -314,5 +314,7 @@ class SecureWSGIServer(WSGIServer):
 # ----- Run Flask Server -----
 if __name__ == "__main__":
     print("Starting server for WSS only...")
-    http_server = SecureWSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler, certfile="cert.pem", keyfile="key.pem")
+    http_server = SecureWSGIServer(("0.0.0.0", 443), app, handler_class=WebSocketHandler,
+				certfile="/etc/letsencrypt/live/curtisqt.com/fullchain.pem",
+				keyfile="/etc/letsencrypt/live/curtisqt.com/privkey.pem")
     http_server.serve_forever()
