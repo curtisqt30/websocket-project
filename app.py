@@ -23,6 +23,12 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # logging w/ filtering
+class Filter404(logging.Filter):
+    def filter(self, record):
+        return "404 Not Found" not in record.getMessage()
+
+logging.getLogger("werkzeug").addFilter(Filter404())
+logging.getLogger("geventwebsocket.handler").addFilter(Filter404())
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger("gevent.ssl").setLevel(logging.ERROR)
 logging.getLogger("engineio.server").setLevel(logging.CRITICAL)
@@ -33,7 +39,7 @@ if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
 # Initialize WebSocket with Flask-SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent")
+socketio = SocketIO(app, cors_allowed_origins="*", path="/socket.io/", async_mode="gevent")
 
 # SSL Setup
 ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -111,7 +117,7 @@ def monitor_inactivity():
     while True:
         now = time.time()
         for sid, last_msg_time in list(user_last_message_time.items()):
-            if now - last_msg_time > 120: 
+            if now - last_msg_time > 600: 
                 socketio.emit("force_disconnect", {"msg": "You have been disconnected due to inactivity."}, room=sid)
                 socketio.server.disconnect(sid)
                 del user_last_message_time[sid]
@@ -131,7 +137,7 @@ def home():
 def dashboard_page():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    room_code = request.args.get("roomId", "").strip().upper()
+    room_code = request.args.get("room", "").strip().upper()
     # when no room ID is in the URL
     if not room_code:
         return render_template("dashboard.html", roomId="None")
@@ -230,7 +236,6 @@ def handle_join(data):
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} joined.")
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
 
-
 @socketio.on("message")
 def handle_message(data):
     global user_last_message_time
@@ -293,7 +298,7 @@ class SecureWSGIServer(WSGIServer):
         global last_ssl_error_time
         try:
             peek = client_socket.recv(5, socket.MSG_PEEK) 
-            if peek.startswith(b"GET /") or peek.startswith(b"POST "):
+            if peek.startswith(b"GET /") and not (b"/socket.io/" in peek or b"/dashboard" in peek):
                 now = time.time()
                 if now - last_ssl_error_time > 1: 
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -301,7 +306,7 @@ class SecureWSGIServer(WSGIServer):
                     last_ssl_error_time = now
                 client_socket.close()
                 return
-            
+        
             super().wrap_socket_and_handle(client_socket, address)
         except Exception as e:
             now = time.time()
@@ -314,7 +319,8 @@ class SecureWSGIServer(WSGIServer):
 # ----- Run Flask Server -----
 if __name__ == "__main__":
     print("Starting server for WSS only...")
-    http_server = SecureWSGIServer(("0.0.0.0", 443), app, handler_class=WebSocketHandler,
+    http_server = SecureWSGIServer(("0.0.0.0", 443), app,
 				certfile="/etc/letsencrypt/live/curtisqt.com/fullchain.pem",
-				keyfile="/etc/letsencrypt/live/curtisqt.com/privkey.pem")
+				keyfile="/etc/letsencrypt/live/curtisqt.com/privkey.pem",
+                handler_class=WebSocketHandler)
     http_server.serve_forever()

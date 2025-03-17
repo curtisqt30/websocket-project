@@ -12,6 +12,7 @@ if (!username) {
 
 // Initialize connection
 const socket = io("wss://curtisqt.com", {
+    path: "/socket.io/",
     transports: ["websocket"]
 });
 
@@ -179,8 +180,8 @@ function sendMessage() {
         alert("Room ID is missing.");
         return;
     }
-    if (!message || message.length > 50) {
-        alert("Message must be between 1 and 50 characters.");
+    if (!message || message.length > 150) {
+        alert("Message must be between 1 and 150 characters.");
         return;
     }
 
@@ -193,5 +194,5 @@ function sendMessage() {
     lastMessageTime = now;
     socket.emit("message", { user: username, msg: message, roomId: roomId });
     messageInput.value = "";
-    document.getElementById("charCount").textContent = "50 characters remaining";
+    document.getElementById("charCount").textContent = "150 characters remaining";
 }
