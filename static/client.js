@@ -43,6 +43,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const roomList = document.getElementById("roomList");
     const createRoomButton = document.getElementById("createRoom");
     const joinRoomButton = document.getElementById("joinRoom");
+    const emojiButton = document.getElementById('emojiButton');
+    const emojiPickerContainer = document.getElementById('emoji-picker-container');
 
     // Display username on the sidebar
     const usernameDisplay = document.createElement("p");
@@ -53,18 +55,19 @@ document.addEventListener("DOMContentLoaded", function () {
     const maxChars = 150;
     const maxRooms = 5;
 
-    // Room storage
+    // Load existing rooms
     const savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
     savedRooms.forEach(roomId => addRoomToSidebar(roomId));
 
-    // Message input handling
-    messageInput.addEventListener("input", () => {
+    // Character count functionality
+    messageInput.addEventListener("input", updateCharCount);
+    function updateCharCount() {
         const remaining = maxChars - messageInput.value.length;
         charCount.textContent = `${remaining} characters remaining`;
-    });
+    }
 
+    // Send message functionality
     sendButton.addEventListener("click", sendMessage);
-
     messageInput.addEventListener("keypress", (event) => {
         if (event.key === "Enter") {
             event.preventDefault();
@@ -72,7 +75,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
-    // room creation/join
+    // Room creation functionality
     createRoomButton.addEventListener("click", function () {
         const savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
         if (savedRooms.length >= maxRooms) {
@@ -99,6 +102,7 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
+    // Join room functionality
     joinRoomButton.addEventListener("click", function () {
         const roomId = document.getElementById("roomCode").value.trim().toUpperCase();
         if (roomId.length === 4) {
@@ -109,6 +113,31 @@ document.addEventListener("DOMContentLoaded", function () {
             alert("Enter a valid 4-character room ID.");
         }
     });
+
+        // Emoji Picker Setup
+        const picker = new EmojiMart.Picker({
+            onEmojiSelect: (emoji) => {
+                messageInput.value += emoji.native;
+                updateCharCount();
+            },
+            theme: 'auto'
+        });
+    
+        emojiPickerContainer.appendChild(picker);
+    
+        // Toggle emoji picker display
+        emojiButton.addEventListener('click', (event) => {
+            event.stopPropagation();  // Prevent immediate close
+            emojiPickerContainer.style.display =
+                emojiPickerContainer.style.display === 'none' ? 'block' : 'none';
+        });
+    
+        // Hide emoji picker when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!emojiPickerContainer.contains(e.target) && !emojiButton.contains(e.target)) {
+                emojiPickerContainer.style.display = 'none';
+            }
+        });
 
     const room = urlParams.get("roomId") || "None";
     document.getElementById("roomId").textContent = room;

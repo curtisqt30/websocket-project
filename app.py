@@ -13,6 +13,7 @@ import random
 import string
 import logging
 import socket
+import bcrypt
 from datetime import datetime
 from cryptography.fernet import Fernet
 
@@ -23,12 +24,6 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # logging w/ filtering
-class Filter404(logging.Filter):
-    def filter(self, record):
-        return "404 Not Found" not in record.getMessage()
-
-logging.getLogger("werkzeug").addFilter(Filter404())
-logging.getLogger("geventwebsocket.handler").addFilter(Filter404())
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger("gevent.ssl").setLevel(logging.ERROR)
 logging.getLogger("engineio.server").setLevel(logging.CRITICAL)
@@ -111,7 +106,12 @@ def save_users(users):
         json.dump(users, file, indent=4)
 
 def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')
+
+def verify_password(password, hashed):
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 def monitor_inactivity():
     while True:
@@ -173,9 +173,9 @@ def login_page():
         })
     if request.method == "POST":
         username = request.form["username"]
-        password = hash_password(request.form["password"])
+        password = request.form["password"]
         users = load_users()
-        if username in users and users[username] == password:
+        if username in users and verify_password(password, users[username]):
             session["username"] = username
             ip = get_client_ip()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

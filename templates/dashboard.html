@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
     <script src="{{ url_for('static', filename='client.js') }}"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
+    <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -33,10 +35,16 @@
             <div id="messages"></div>
 
             <div class="message-input">
-                <input type="text" id="messageInput" placeholder="Type a message..." maxlength="150">
+                <div class="top-actions">
+                    <button id="emojiButton">😊 Emoji</button>
+                    <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
+                    <button id="uploadButton">📎 File Upload</button>
+                </div>
                 <button id="sendButton">Send</button>
-            </div>
-
+            
+                <div id="emoji-picker-container" style="display:none;"></div>
+            </div>            
+            
             <p id="charCount">150 characters remaining</p>
         </div>
     </div>

@@ -110,32 +110,6 @@ p {
     border: 1px solid #ddd;
 }
 
-.message-input {
-    display: flex;
-    padding: 10px;
-    background-color: #f0f2f5;
-}
-
-#messageInput {
-    flex-grow: 1;
-    padding: 10px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-}
-
-#sendButton {
-    background-color: #007bff;
-    color: #ffffff;
-    border: none;
-    border-radius: 4px;
-    margin-left: 10px;
-    cursor: pointer;
-}
-
-#sendButton:hover {
-    background-color: #0056b3;
-}
-
 .room-list {
     margin-top: 15px;
     background-color: #f0f2f5;
@@ -155,3 +129,66 @@ p {
     cursor: pointer;
 }
 
+.message-input {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    background-color: #f0f2f5;
+    border-top: 1px solid #ddd;
+    position: relative; 
+}
+
+.top-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.top-actions textarea {
+    flex-grow: 1;
+    height: 80px;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    resize: none;
+}
+
+.top-actions button {
+    width: auto;
+    flex: 0 0 auto;
+    padding: 10px 15px;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: white;
+    cursor: pointer;
+    border: none;
+    margin: 0;  /* Fixes stacking issue */
+}
+
+.top-actions button:hover {
+    background-color: #0056b3;
+}
+
+#sendButton {
+    width: 100%;
+    padding: 10px;
+    border-radius: 4px;
+    background-color: #28a745;
+    color: white;
+    cursor: pointer;
+    border: none;
+}
+
+#sendButton:hover {
+    background-color: #218838;
+}
+
+#emoji-picker-container {
+    position: absolute;
+    bottom: 100px;
+    right: 20px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    border-radius: 8px;
+}
