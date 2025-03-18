@@ -147,14 +147,18 @@ document.addEventListener("DOMContentLoaded", function () {
 // Function to append messages to chat window
 function appendMessage(user, msg, isSystemMessage = false) {
     let messages = document.getElementById("messages");
-    let messageElement = document.createElement("p");
+    let messageElement = document.createElement("div");
 
     if (isSystemMessage) {
-        messageElement.style.fontStyle = "italic";
-        messageElement.innerText = msg;
+        messageElement.innerHTML = `<p style="font-style: italic;">${msg}</p>`;
     } else {
         let timestamp = new Date().toLocaleTimeString();
-        messageElement.innerText = `[${timestamp}] ${user}: ${msg}`;
+        // Parse Markdown to HTML
+        const parsedMessage = marked.parse(msg);
+
+        messageElement.innerHTML = `
+            <p><strong>[${timestamp}] ${user}:</strong> ${parsedMessage}</p>
+        `;
     }
 
     messages.appendChild(messageElement);

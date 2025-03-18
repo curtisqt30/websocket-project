@@ -192,3 +192,23 @@ p {
     box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     border-radius: 8px;
 }
+
+#messages p {
+    margin: 5px 0;
+}
+
+#messages a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+#messages a:hover {
+    text-decoration: underline;
+}
+
+.markdown-instruction {
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 5px;
+    text-align: center;
+}
