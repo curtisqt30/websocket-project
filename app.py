@@ -235,6 +235,9 @@ def handle_join(data):
         rooms[roomId]["users"].append(username)
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} joined.")
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
+    else:
+        print(f"[ERROR] Room {roomId} doesn't exist or was deleted.")
+        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists. Redirecting you to the dashboard."}, room=request.sid)
 
 @socketio.on("message")
 def handle_message(data):
@@ -275,6 +278,9 @@ def handle_leave(data):
         rooms[roomId]["users"].remove(username)
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} left the chat.")
         emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
+    else:
+        print(f"[ERROR] Room {roomId} doesn't exist or user {username} not in room.")
+        emit("error", {"msg": f"Room {roomId} doesn't exist or user {username} not in room."}, room=request.sid)
     disconnect()
 
 @socketio.on_error_default

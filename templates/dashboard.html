@@ -33,15 +33,18 @@
         <!-- Main Chat Section -->
         <div class="main-content">
             <div class="chat-header">
-                <h1>Chatroom: <span id="roomId">None</span></h1>
+                <h1>Chatroom: <span id="roomId">{{ roomId }}</span></h1>
+                {% if roomId != "None" %}
+                    <button id="leaveRoomButton" class="leave-btn">🏠 Leave Room</button>
+                {% endif %}
             </div>
 
             <div id="messages"></div>
 
             <div class="message-input">
                 <div class="top-actions">
-                    <button id="emojiButton">😊 Emoji</button>
                     <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
+                    <button id="emojiButton">😊 Emoji</button>
                     <button id="uploadButton">📁 File Upload</button>
                 </div>
                 <button id="sendButton">Send</button>
