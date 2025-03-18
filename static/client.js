@@ -31,7 +31,10 @@ socket.on("force_disconnect", (data) => {
 });
 
 // Handle incoming messages
-socket.on("message", (data) => appendMessage(data.user, data.msg, false));
+socket.on("message", (data) => {
+    console.log("[DEBUG] Received message:", data);
+    appendMessage(data.user, data.msg, false);
+});
 socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
 socket.on("user_left", (data) => appendMessage(null, data.msg, true));
 
@@ -153,14 +156,10 @@ function appendMessage(user, msg, isSystemMessage = false) {
         messageElement.innerHTML = `<p style="font-style: italic;">${msg}</p>`;
     } else {
         let timestamp = new Date().toLocaleTimeString();
-        // Parse Markdown to HTML
-        const parsedMessage = marked.parse(msg);
-
         messageElement.innerHTML = `
-            <p><strong>[${timestamp}] ${user}:</strong> ${parsedMessage}</p>
+            <p><strong>[${timestamp}] ${user}:</strong> ${marked.parse(msg)}</p>
         `;
     }
-
     messages.appendChild(messageElement);
     messages.scrollTop = messages.scrollHeight;
 }

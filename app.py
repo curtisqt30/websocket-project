@@ -255,7 +255,7 @@ def handle_message(data):
     user_last_message_time[request.sid] = now
     log_message(roomId, user, msg)
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {user}: {msg}")
-    emit("message", {"user": user, "msg": msg, "room": roomId}, room=roomId)
+    emit("message", {"user": user, "msg": msg}, room=roomId)
 
 @socketio.on("disconnect")
 def handle_disconnect():
