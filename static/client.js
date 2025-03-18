@@ -66,14 +66,12 @@ document.addEventListener("DOMContentLoaded", function () {
     const messagesContainer = document.getElementById("messages");
     const leaveRoomButton = document.getElementById("leaveRoomButton");
 
-    // Dispaly message for no chatroom
-    if (currentRoom === "None") {
+    // Display message for no chatroom
+    if (!roomId || roomId === "None") {
         messagesContainer.innerHTML = `
-            <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
+            <p style="color: gray; font-style: italic; text-align: center; margin-top: 20px;">
                 You're currently not in a chatroom. Create or join a room using the sidebar.
             </p>`;
-
-        // Disable input & buttons when not in a room
         messageInput.disabled = true;
         sendButton.disabled = true;
         emojiButton.disabled = true;
@@ -89,7 +87,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Leave room button functionality
     if (leaveRoomButton) {
         leaveRoomButton.addEventListener("click", () => {
-            sessionStorage.removeItem("room");
+            socket.emit("leave", { user: username, roomId: roomId });
+            sessionStorage.removeItem("room"); 
             window.location.href = "/dashboard";
         });
     }
@@ -277,8 +276,8 @@ function sendMessage() {
     const messageInput = document.getElementById("messageInput");
     const message = messageInput.value.trim();
 
-    if (!roomId) {
-        alert("Room ID is missing.");
+    if (!roomId || roomId === "None") {
+        alert("You're not in a room. Please join one first.");
         return;
     }
     if (!message || message.length > 150) {

@@ -65,8 +65,13 @@ def is_ip_blocked(ip):
         attempts, block_start = failed_login_attempts[ip]
         if attempts >= MAX_FAILED_ATEMPTS:
             if time.time() - block_start < IP_BLOCK_DURATION:
+                remaining_time = int(IP_BLOCK_DURATION - (time.time() - block_start))
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                      f"[SECURITY] IP '{ip}' is blocked for {remaining_time} seconds due to {attempts} failed attempts.")
                 return True
             else:
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                      f"[INFO] IP '{ip}' block expired. Removing from blocked list.")
                 del failed_login_attempts[ip]
     return False
 
@@ -118,13 +123,25 @@ def monitor_inactivity():
         now = time.time()
         for sid, last_msg_time in list(user_last_message_time.items()):
             if now - last_msg_time > 600: 
+                username = session.get("username", "Unknown")
+                roomId = session.get("room", "Unknown")
+                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                      f"[INFO] Forcefully disconnected user '{username}' in room '{roomId}' due to inactivity.")
                 socketio.emit("force_disconnect", {"msg": "You have been disconnected due to inactivity."}, room=sid)
                 socketio.server.disconnect(sid)
                 del user_last_message_time[sid]
+                if roomId in rooms and not rooms[roomId]["users"]:
+                    remove_room(roomId)
         time.sleep(5)
+
 
 Thread(target=monitor_inactivity, daemon=True).start()
 user_last_message_time = {}
+
+def remove_room(roomId):
+    if roomId in rooms:
+        del rooms[roomId]
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] Room '{roomId}' has been removed.")
 
 # --------------------------- Routes -------------------
 @app.route("/")
@@ -137,8 +154,7 @@ def home():
 def dashboard_page():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    room_code = request.args.get("room", "").strip().upper()
-    # when no room ID is in the URL
+    room_code = request.args.get("roomId", "").strip().upper()
     if not room_code:
         return render_template("dashboard.html", roomId="None")
     return render_template("dashboard.html", roomId=room_code)
@@ -196,11 +212,16 @@ def register():
         password = request.form["password"]
         users = load_users()
         if username in users:
+            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                  f"[INFO] Registration failed: Username '{username}' is already taken.")
             return render_template("register.html", error="Username already taken")
         users[username] = hash_password(password)
         save_users(users)
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+              f"[INFO] New user registered successfully: '{username}'")
         return redirect(url_for("login_page"))
     return render_template("register.html")
+
 
 @app.route("/logout")
 def logout():
@@ -245,10 +266,11 @@ def handle_message(data):
     if "username" not in session:
         return
     user = session.get("username", "Guest")
-    msg = data.get("msg", "")[:150] 
+    msg = data.get("msg", "")[:150]
     roomId = data.get("roomId", "").strip().upper()
     if roomId not in rooms:
         print(f"[ERROR] Room {roomId} doesn't exist.")
+        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists. Redirecting to the dashboard."}, room=request.sid)
         return
     # Rate-limit check
     now = time.time()
@@ -259,6 +281,7 @@ def handle_message(data):
     log_message(roomId, user, msg)
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {user}: {msg}")
     emit("message", {"user": user, "msg": msg}, room=roomId)
+
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -280,7 +303,7 @@ def handle_leave(data):
         emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
     else:
         print(f"[ERROR] Room {roomId} doesn't exist or user {username} not in room.")
-        emit("error", {"msg": f"Room {roomId} doesn't exist or user {username} not in room."}, room=request.sid)
+        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists. Redirecting you to the dashboard."}, room=request.sid)
     disconnect()
 
 @socketio.on_error_default

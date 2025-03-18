@@ -27,19 +27,26 @@
 
             <div class="room-list" id="roomList"></div>
 
+            <h1>Chatroom: <span id="roomId">{{ roomId }}</span></h1>
+            {% if roomId != "None" %}
+                <button id="leaveRoomButton" class="leave-btn">🏠 Leave Room</button>
+            {% endif %}
+
             <p><a href="/logout">Logout</a></p>
         </div>
 
         <!-- Main Chat Section -->
         <div class="main-content">
             <div class="chat-header">
-                <h1>Chatroom: <span id="roomId">{{ roomId }}</span></h1>
-                {% if roomId != "None" %}
-                    <button id="leaveRoomButton" class="leave-btn">🏠 Leave Room</button>
-                {% endif %}
             </div>
 
-            <div id="messages"></div>
+            <div id="messages">
+                {% if roomId == "None" %}
+                    <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
+                        You're currently not in a chatroom. Create or join a room using the sidebar.
+                    </p>
+                {% endif %}
+            </div>
 
             <div class="message-input">
                 <div class="top-actions">
