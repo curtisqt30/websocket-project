@@ -21,6 +21,12 @@ from cryptography.fernet import Fernet
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret-key"
 app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True 
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
+
 Session(app)
 
 # logging w/ filtering
@@ -34,7 +40,13 @@ if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
 # Initialize WebSocket with Flask-SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", path="/socket.io/", async_mode="gevent")
+socketio = SocketIO(app, 
+                    cors_allowed_origins="*", 
+                    path="/socket.io/", 
+                    async_mode="gevent",
+                    ping_timeout=20,
+                    ping_interval=5 
+)
 
 # SSL Setup
 ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -49,7 +61,7 @@ last_ssl_error_time = 0
 USER_DB = "users.json"
 
 # Active clients
-connected_clients = set()
+# connected_clients = set()
 
 # Store the last message timestamp for each user
 user_last_message_time = {}
@@ -125,7 +137,7 @@ def monitor_inactivity():
     while True:
         now = time.time()
         for sid, last_msg_time in list(user_last_message_time.items()):
-            if now - last_msg_time > 600: 
+            if now - last_msg_time > 1800:   
                 username = session.get("username", "Unknown")
                 roomId = session.get("room", "Unknown")
                 print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
@@ -155,7 +167,8 @@ def home():
 
 @app.route("/dashboard")
 def dashboard_page():
-    if "username" not in session:
+    if not session.get("username"):
+        # print("[DEBUG] Session missing username, redirecting...")
         return redirect(url_for("login_page"))
     room_code = request.args.get("roomId", "").strip().upper()
     if not room_code:
@@ -184,6 +197,7 @@ def join_room_route():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
+    # print("Current session content:", dict(session))
     ip = get_client_ip()
     if is_ip_blocked(ip):
         return jsonify({
@@ -196,6 +210,7 @@ def login_page():
         users = load_users()
         if username in users and verify_password(password, users[username]):
             session["username"] = username
+            session.modified = True
             ip = get_client_ip()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{timestamp}] [LOGIN] {username} successfully logged in. (IP: {ip})")
@@ -244,9 +259,9 @@ def handle_connect():
     if "username" not in session:
         # print(f"[DEBUG] Session missing username - rejecting connection")
         disconnect()
-    else:
-        # print(f"[DEBUG] Connection Successful for {session['username']}")
-        connected_clients.add(request.sid)
+    # else:
+    #     # print(f"[DEBUG] Connection Successful for {session['username']}")
+    #     connected_clients.add(request.sid)
 
 @socketio.on("authenticate")
 def handle_auth(data):
@@ -357,18 +372,24 @@ class SecureWSGIServer(WSGIServer):
                 last_ssl_error_time = now
             client_socket.close()
 
-def kick_dashboard_users():
-    for sid in list(connected_clients):
-        socketio.emit("force_disconnect", {"msg": "Server restarted. Please log in again."}, room=sid)
-        socketio.server.disconnect(sid)
-        connected_clients.remove(sid)
+# def kick_dashboard_users():
+#     for sid in list(connected_clients):
+#         socketio.emit("force_disconnect", {"msg": "Server restarted. Please log in again."}, room=sid)
+#         socketio.server.disconnect(sid)
+#         connected_clients.remove(sid)
+
+@app.before_request
+def clear_stale_sessions():
+    if not getattr(app, "_got_first_request", False):
+        try:
+            session.clear()
+            app._got_first_request = True
+            print("[INFO] Cleared stale sessions on server restart.")
+        except Exception as e:
+            print(f"[ERROR] Failed to clear sessions: {e}")
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
     print("Starting server for WSS only...")
-    kick_dashboard_users()
-    http_server = SecureWSGIServer(("0.0.0.0", 443), app,
-				certfile="/etc/letsencrypt/live/curtisqt.com/fullchain.pem",
-				keyfile="/etc/letsencrypt/live/curtisqt.com/privkey.pem",
-                handler_class=WebSocketHandler)
+    http_server = SecureWSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler)
     http_server.serve_forever()

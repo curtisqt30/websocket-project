@@ -13,7 +13,10 @@ if (!username) {
 // Initialize connection
 const socket = io("wss://curtisqt.com", {
     path: "/socket.io/",
-    transports: ["websocket"]
+    transports: ["websocket"],
+    timeout: 20000,             
+    reconnectionAttempts: 10,      
+    reconnectionDelay: 2000       
 });
 
 
