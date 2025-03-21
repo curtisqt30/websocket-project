@@ -273,7 +273,7 @@ def handle_join(data):
 
 @socketio.on("message")
 def handle_message(data):
-    print(f"[DEBUG] Incoming message data: {data}")
+    # print(f"[DEBUG] Incoming message data: {data}")
     global user_last_message_time
     if "username" not in session:
         return
