@@ -48,6 +48,9 @@ last_ssl_error_time = 0
 # User database
 USER_DB = "users.json"
 
+# Active clients
+connected_clients = set()
+
 # Store the last message timestamp for each user
 user_last_message_time = {}
 
@@ -230,17 +233,25 @@ def logout():
     session.pop("username", None)
     return redirect(url_for("login_page"))
 
+@app.route('/favicon.ico')
+def favicon():
+    return '', 204
 # ----------------------------- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
+    ip = get_client_ip()
+    # print(f"[DEBUG] Connection Attempt Received from {ip}")
     if "username" not in session:
-        ip = get_client_ip()
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ERROR] Unknown user tried to connect without logging in. (IP: {ip})")
+        # print(f"[DEBUG] Session missing username - rejecting connection")
         disconnect()
+    else:
+        # print(f"[DEBUG] Connection Successful for {session['username']}")
+        connected_clients.add(request.sid)
 
 @socketio.on("authenticate")
 def handle_auth(data):
     username = data.get("username")
+    # print(f"[DEBUG] Auth attempt with username: {username}")
     if not username:
         print("No username provided, disconnecting.")
         disconnect()
@@ -262,6 +273,7 @@ def handle_join(data):
 
 @socketio.on("message")
 def handle_message(data):
+    print(f"[DEBUG] Incoming message data: {data}")
     global user_last_message_time
     if "username" not in session:
         return
@@ -345,9 +357,16 @@ class SecureWSGIServer(WSGIServer):
                 last_ssl_error_time = now
             client_socket.close()
 
+def kick_dashboard_users():
+    for sid in list(connected_clients):
+        socketio.emit("force_disconnect", {"msg": "Server restarted. Please log in again."}, room=sid)
+        socketio.server.disconnect(sid)
+        connected_clients.remove(sid)
+
 # ----- Run Flask Server -----
 if __name__ == "__main__":
     print("Starting server for WSS only...")
+    kick_dashboard_users()
     http_server = SecureWSGIServer(("0.0.0.0", 443), app,
 				certfile="/etc/letsencrypt/live/curtisqt.com/fullchain.pem",
 				keyfile="/etc/letsencrypt/live/curtisqt.com/privkey.pem",

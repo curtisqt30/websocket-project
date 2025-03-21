@@ -16,11 +16,27 @@ const socket = io("wss://curtisqt.com", {
     transports: ["websocket"]
 });
 
-// Authenticate after connecting
+
+console.log("[DEBUG] Attempting WebSocket Connection...");
+
 socket.on("connect", () => {
-    socket.emit("authenticate", { username });
-    socket.emit("join", { roomId });
+    console.log("[DEBUG] Socket.IO Connected Successfully");
+
+    if (username) {
+        console.log(`[DEBUG] Attempting Authentication with username: ${username}`);
+        socket.emit("authenticate", { username });
+    } else {
+        console.error("[DEBUG] No username found in session storage.");
+    }
+
+    if (roomId) {
+        console.log(`[DEBUG] Attempting to Join Room: ${roomId}`);
+        socket.emit("join", { roomId });
+    } else {
+        console.error("[DEBUG] No roomId found in session storage.");
+    }
 });
+
 
 socket.on("rate_limit", (data) => alert(data.msg));
 
