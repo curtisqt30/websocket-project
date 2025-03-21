@@ -30,6 +30,10 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 Session(app)
 
 # Uploading files
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB file size limit
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({"success": False, "message": "File size exceeds 8MB limit."}), 413
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif"}
 if not os.path.exists(UPLOAD_FOLDER):
@@ -82,6 +86,7 @@ failed_login_attempts = {}
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATEMPTS = 3
 
+# --------------------------- Functions ----------------
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 

@@ -157,15 +157,16 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadButton.addEventListener("click", () => {
         const fileInput = document.createElement("input");
         fileInput.type = "file";
-    
         fileInput.addEventListener("change", (event) => {
             const file = event.target.files[0];
-    
             if (!file) return;
-    
+            // Early size check (8MB limit)
+            if (file.size > 8 * 1024 * 1024) {
+                alert("File size exceeds the 8MB limit. Please upload a smaller file.");
+                return;
+            }
             const formData = new FormData();
             formData.append("file", file);
-    
             fetch("/upload", {
                 method: "POST",
                 body: formData,
@@ -181,7 +182,6 @@ document.addEventListener("DOMContentLoaded", function () {
             })
             .catch((error) => console.error("[ERROR] Upload failed:", error));
         });
-    
         fileInput.click();
     });
 
@@ -208,16 +208,16 @@ function loadRooms() {
 function appendMessage(user, msg, isSystemMessage = false) {
     const messages = document.getElementById("messages");
     const messageElement = document.createElement("div");
-
-    if (msg.includes("<a ")) {
-        messageElement.innerHTML = `<p><strong>${user}:</strong> ${msg}</p>`;
-    } else if (isSystemMessage) {
-        messageElement.innerHTML = `<p style="font-style: italic;">${msg}</p>`;
+    const timestamp = new Date().toLocaleTimeString();
+    if (isSystemMessage) {
+        messageElement.innerHTML = `<div style="font-style: italic;">${msg}</div>`;
     } else {
-        const timestamp = new Date().toLocaleTimeString();
-        messageElement.innerHTML = `<p><strong>[${timestamp}] ${user}:</strong> ${marked.parse(msg)}</p>`;
+        const cleanMsg = marked.parse(msg).replace(/<p>|<\/p>/g, '');
+        messageElement.innerHTML = `<div>
+            <strong>[${timestamp}] ${user}:</strong> 
+            <span>${cleanMsg}</span>
+        </div>`;
     }
-
     messages.appendChild(messageElement);
     messages.scrollTop = messages.scrollHeight;
 }
