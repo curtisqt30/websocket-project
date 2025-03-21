@@ -76,14 +76,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");
     const charCount = document.getElementById("charCount");
     const sendButton = document.getElementById("sendButton");
-    const roomList = document.getElementById("roomList");
+    // const roomList = document.getElementById("roomList");
     const createRoomButton = document.getElementById("createRoom");
     const joinRoomButton = document.getElementById("joinRoom");
     const emojiButton = document.getElementById('emojiButton');
     const emojiPickerContainer = document.getElementById('emoji-picker-container');
-    const currentRoom = "{{ roomId }}";
+    // const currentRoom = "{{ roomId }}";
     const messagesContainer = document.getElementById("messages");
     const leaveRoomButton = document.getElementById("leaveRoomButton");
+    const uploadButton = document.getElementById("uploadButton");
 
     // Display message for no chatroom
     if (!roomId || roomId === "None") {
@@ -152,6 +153,38 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     });
 
+    // Upload file functionality
+    uploadButton.addEventListener("click", () => {
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+    
+        fileInput.addEventListener("change", (event) => {
+            const file = event.target.files[0];
+    
+            if (!file) return;
+    
+            const formData = new FormData();
+            formData.append("file", file);
+    
+            fetch("/upload", {
+                method: "POST",
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const fileLink = `<a href="/uploads/${data.filename}" target="_blank">${data.filename}</a>`;
+                    socket.emit("message", { user: username, msg: fileLink, roomId: roomId });
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch((error) => console.error("[ERROR] Upload failed:", error));
+        });
+    
+        fileInput.click();
+    });
+
     const room = urlParams.get("roomId") || "None";
     document.getElementById("roomId").textContent = room;
     sessionStorage.setItem("room", room);
@@ -176,14 +209,15 @@ function appendMessage(user, msg, isSystemMessage = false) {
     const messages = document.getElementById("messages");
     const messageElement = document.createElement("div");
 
-    if (isSystemMessage) {
+    if (msg.includes("<a ")) {
+        messageElement.innerHTML = `<p><strong>${user}:</strong> ${msg}</p>`;
+    } else if (isSystemMessage) {
         messageElement.innerHTML = `<p style="font-style: italic;">${msg}</p>`;
     } else {
         const timestamp = new Date().toLocaleTimeString();
-        messageElement.innerHTML = `
-            <p><strong>[${timestamp}] ${user}:</strong> ${marked.parse(msg)}</p>
-        `;
+        messageElement.innerHTML = `<p><strong>[${timestamp}] ${user}:</strong> ${marked.parse(msg)}</p>`;
     }
+
     messages.appendChild(messageElement);
     messages.scrollTop = messages.scrollHeight;
 }

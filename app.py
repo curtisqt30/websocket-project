@@ -3,7 +3,7 @@ import json
 import os
 import time
 import hashlib
-from flask import Flask, render_template, redirect, url_for, request, session, jsonify
+from flask import Flask, render_template, redirect, url_for, request, session, jsonify, send_from_directory
 from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_session import Session
 from gevent.pywsgi import WSGIServer
@@ -16,6 +16,7 @@ import socket
 import bcrypt
 from datetime import datetime
 from cryptography.fernet import Fernet
+from werkzeug.utils import secure_filename
 
 # Flask setup
 app = Flask(__name__)
@@ -26,8 +27,14 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
-
 Session(app)
+
+# Uploading files
+UPLOAD_FOLDER = "uploads"
+ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif"}
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
 # logging w/ filtering
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -74,6 +81,34 @@ failed_login_attempts = {}
 
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATEMPTS = 3
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    if "file" not in request.files:
+        return jsonify({"success": False, "message": "No file provided"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"success": False, "message": "No selected file"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        file.save(file_path)
+        print(f"[INFO] File '{filename}' uploaded successfully.")
+        return jsonify({
+            "success": True,
+            "filename": filename
+        })
+    return jsonify({"success": False, "message": "Invalid file type"}), 400
+
+@app.route("/uploads/<filename>")
+def uploaded_file(filename):
+    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+
 
 def is_ip_blocked(ip):
     if ip in failed_login_attempts:
