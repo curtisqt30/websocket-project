@@ -34,34 +34,43 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 Session(app)
 
-# RSA Key Managment
+# RSA Keys
 def load_rsa_keys():
-    with open("private_key.pem", "rb") as f:
-        private_key = serialization.load_pem_private_key(f.read(), password=None)
-    with open("public_key.pem", "rb") as f:
-        public_key = serialization.load_pem_public_key(f.read())
-    return private_key, public_key
+    try:
+        with open("private_key.pem", "rb") as f:
+            key_data = f.read()
+            print(f"[DEBUG] Raw Private Key Data (Length: {len(key_data)})")
+            print(key_data.decode())
+        private_key = serialization.load_pem_private_key(key_data, password=None)
+        with open("public_key.pem", "rb") as f:
+            public_key = serialization.load_pem_public_key(f.read())
+        return private_key, public_key
+    except Exception as e:
+        print(f"[ERROR] Failed to load private key: {e}")
+        raise e
 
 def generate_rsa_keys():
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
-    public_key = private_key.public_key()
-    with open("private_key.pem", "wb") as f:
+    if not os.path.exists("private_key.pem") or not os.path.exists("public_key.pem"):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+        public_key = private_key.public_key()
         private_key_bytes = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption()
         )
-        print("[DEBUG] Generated Private Key:", private_key_bytes.decode())
-        f.write(private_key_bytes)
-    with open("public_key.pem", "wb") as f:
         public_key_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-        print("[DEBUG] Generated Public Key:", public_key_bytes.decode())
-        f.write(public_key_bytes)
-
-print("[INFO] RSA keys generated successfully.")
+        if len(private_key_bytes) < 1700 or len(public_key_bytes) < 400:
+            print("[ERROR] Key generation failed. Retrying...")
+            generate_rsa_keys()
+            return
+        with open("private_key.pem", "wb") as f:
+            f.write(private_key_bytes)
+        with open("public_key.pem", "wb") as f:
+            f.write(public_key_bytes)
+        print("[INFO] RSA keys generated successfully.")
 
 generate_rsa_keys()
 private_key, rsa_public_key = load_rsa_keys()
@@ -74,7 +83,7 @@ def generate_aes_key():
     username = session.get("username")
     if not username:
         return jsonify({"success": False, "message": "User not authenticated."})
-    aes_key = os.urandom(32)
+    aes_key = os.urandom(32)  # AES-256 requires a 32-byte key
     session_keys[username] = aes_key
     try:
         encrypted_aes_key = rsa_public_key.encrypt(
@@ -85,10 +94,13 @@ def generate_aes_key():
                 label=None
             )
         )
-        print("[DEBUG] AES Key successfully encrypted:", base64.b64encode(encrypted_aes_key).decode())
+        encrypted_key_b64 = base64.b64encode(encrypted_aes_key).decode()
+        print(f"[DEBUG] AES Key (Raw, 32 bytes): {aes_key}")
+        print(f"[DEBUG] Encrypted AES Key (Length: {len(encrypted_key_b64)}): {encrypted_key_b64}")
+
         return jsonify({
             "success": True,
-            "encrypted_aes_key": base64.b64encode(encrypted_aes_key).decode()
+            "encrypted_aes_key": encrypted_key_b64
         })
     except Exception as e:
         print(f"[ERROR] AES Key encryption failed: {e}")
@@ -98,8 +110,8 @@ def encrypt_message(message, aes_key):
     iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(aes_key), modes.CFB8(iv))
     encryptor = cipher.encryptor()
-    encrypted_data = iv + encryptor.update(message.encode()) + encryptor.finalize()
-    return base64.b64encode(encrypted_data).decode()
+    encrypted_data = iv + encryptor.update(message.encode('utf-8')) + encryptor.finalize()
+    return base64.b64encode(encrypted_data).decode('utf-8')
 
 def decrypt_message(encrypted_message, aes_key):
     try:
@@ -114,12 +126,12 @@ def decrypt_message(encrypted_message, aes_key):
 
 @app.route("/get_private_key", methods=["POST"])
 def get_private_key():
-    if "username" not in session:
-        return jsonify({"success": False, "message": "User not authenticated."})
     try:
         with open("private_key.pem", "r") as f:
             private_key = f.read().strip()
-        private_key = private_key.replace("\r\n", "\n").strip()
+        print(f"[DEBUG] Private Key Content (Length: {len(private_key)})")
+        print(private_key)
+        private_key = "\n".join(line.strip() for line in private_key.strip().splitlines())
         if not private_key.startswith("-----BEGIN PRIVATE KEY-----") or \
            not private_key.endswith("-----END PRIVATE KEY-----"):
             print("[ERROR] Private key format invalid or incomplete.")

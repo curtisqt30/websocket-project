@@ -89,42 +89,34 @@ fetch("/generate_aes_key", { method: "POST" })
         }
     });
 
-    function decryptAESKey(encryptedKey) {
-        console.log("[DEBUG] Decrypting AES Key:", encryptedKey);
-        try {
-            const privateKeyPEM = sessionStorage.getItem("private_key");
-            if (!privateKeyPEM) {
-                throw new Error("Private key not found in sessionStorage.");
-            }
-            const formattedKey = privateKeyPEM.trim().replace(/\r?\n|\r/g, '\n');
-    
-            if (!formattedKey.includes("-----BEGIN PRIVATE KEY-----") || 
-                !formattedKey.includes("-----END PRIVATE KEY-----")) {
-                throw new Error("Private key format is invalid or incomplete.");
-            }
-            const privateKey = forge.pki.privateKeyFromPem(formattedKey);
-            const decodedKey = forge.util.decode64(encryptedKey.trim());
-            if (!decodedKey || decodedKey.length === 0) {
-                throw new Error("Decoded AES key is empty or invalid.");
-            }
-            const decryptedKey = privateKey.decrypt(decodedKey, 'RSA-OAEP', {
-                md: forge.md.sha256.create()
-            });
-            if (!decryptedKey || decryptedKey.length !== 32) {
-                console.error("[ERROR] Decrypted AES key size mismatch. Expected 32 bytes.");
-                return null;
-            }
-            console.log("[DEBUG] AES Key decrypted successfully.");
-            const aesKeyB64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(decryptedKey));
-            sessionStorage.setItem("aes_key", aesKeyB64);
-            return aesKeyB64;
-        } catch (error) {
-            console.error("[ERROR] Failed to decrypt AES key:", error.message);
+function decryptAESKey(encryptedKey) {
+    console.log("[DEBUG] Decrypting AES Key:", encryptedKey);
+    try {
+        const privateKeyPEM = sessionStorage.getItem("private_key");
+        if (!privateKeyPEM) {
+            throw new Error("Private key not found in sessionStorage.");
+        }
+        const formattedKey = privateKeyPEM.trim().replace(/\r?\n|\r/g, '\n');
+        const privateKey = forge.pki.privateKeyFromPem(formattedKey);
+        const decodedKey = forge.util.decode64(encryptedKey.trim());
+        console.log("[DEBUG] Decoded AES Key Length Before Decryption:", decodedKey.length);
+        const decryptedKey = privateKey.decrypt(decodedKey, 'RSA-OAEP', {
+            md: forge.md.sha256.create()
+        });
+        console.log("[DEBUG] Decrypted AES Key Length After Decryption:", decryptedKey.length);
+        if (!decryptedKey || decryptedKey.length !== 32) {
+            console.error("[ERROR] AES Key size mismatch. Expected 32 bytes.");
             return null;
         }
+        const aesKeyB64 = forge.util.encode64(decryptedKey);  
+        sessionStorage.setItem("aes_key", aesKeyB64);
+        console.log("[DEBUG] AES Key decrypted successfully.");
+        return aesKeyB64;
+    } catch (error) {
+        console.error("[ERROR] Failed to decrypt AES key:", error.message);
+        return null;
     }
-    
-    
+}
     
 function decryptMessage(encryptedMsg) {
     const aesKeyBase64 = sessionStorage.getItem("aes_key");
@@ -132,22 +124,22 @@ function decryptMessage(encryptedMsg) {
         console.error("[ERROR] AES key not found in sessionStorage.");
         return "[ERROR] Failed to decrypt message.";
     }
-    const aesKey = CryptoJS.enc.Base64.parse(aesKeyBase64);
-    if (aesKey.sigBytes !== 32) {
+    const aesKey = forge.util.decode64(aesKeyBase64);
+    if (aesKey.length !== 32) {
         console.error("[ERROR] AES Key size mismatch. Expected 32 bytes.");
         return "[ERROR] AES Key size invalid.";
     }
     try {
-        const decodedData = CryptoJS.enc.Base64.parse(encryptedMsg).toString(CryptoJS.enc.Utf8);
-        if (decodedData.length < 16) {
+        const decodedData = CryptoJS.enc.Base64.parse(encryptedMsg);
+        if (decodedData.sigBytes < 16) {
             console.error("[ERROR] Encrypted data is too short for IV + Ciphertext.");
             return "[ERROR] Invalid encrypted message format.";
         }
-        const iv = CryptoJS.enc.Utf8.parse(decodedData.substring(0, 16));
-        const ciphertext = decodedData.substring(16);
+        const iv = CryptoJS.lib.WordArray.create(decodedData.words.slice(0, 4)); 
+        const ciphertext = CryptoJS.lib.WordArray.create(decodedData.words.slice(4));
         const decryptedBytes = CryptoJS.AES.decrypt(
-            { ciphertext: CryptoJS.enc.Base64.parse(ciphertext) },
-            aesKey,
+            { ciphertext: ciphertext },
+            CryptoJS.lib.WordArray.create(aesKey),
             {
                 iv: iv,
                 mode: CryptoJS.mode.CFB,
@@ -433,25 +425,44 @@ function setupEmojiPicker() {
 // Ensure keys are fetched and stored securely
 function fetchPrivateKey() {
     fetch("/get_private_key", { method: "POST" })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log("[DEBUG] Private Key Received:", data.private_key);
-                const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n'); 
-                sessionStorage.setItem("private_key", formattedKey);
-            } else {
-                console.error("[ERROR] Failed to retrieve private key:", data.message);
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log("[DEBUG] Private Key Received:", data.private_key);
+            const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n');
+            
+            if (!formattedKey.includes("-----BEGIN PRIVATE KEY-----") || 
+                !formattedKey.includes("-----END PRIVATE KEY-----")) {
+                console.error("[ERROR] Private key format is invalid or incomplete.");
+                return;
             }
-        })
-        .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
+
+            sessionStorage.setItem("private_key", formattedKey);
+        } else {
+            console.error("[ERROR] Failed to retrieve private key:", data.message);
+        }
+    })
+    .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
 }
 
 // Clear stale keys on refresh
 window.addEventListener("load", () => {
-    sessionStorage.removeItem("private_key");
-    sessionStorage.removeItem("aes_key");
-    console.log("[DEBUG] Cleared stale keys on refresh.");
-    fetchPrivateKey();
+    if (!sessionStorage.getItem("private_key")) {
+        console.log("[DEBUG] Private key not found, fetching again...");
+        fetchPrivateKey();
+    }
+    if (!sessionStorage.getItem("aes_key")) {
+        console.log("[DEBUG] AES key not found, requesting again...");
+        fetch("/generate_aes_key", { method: "POST" })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    decryptAESKey(data.encrypted_aes_key);
+                } else {
+                    console.error("[ERROR] Failed to fetch AES key.");
+                }
+            });
+    }
 });
 
 let lastMessageTime = 0;
