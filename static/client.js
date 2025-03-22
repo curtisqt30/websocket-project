@@ -14,11 +14,10 @@ if (!username) {
 const socket = io("wss://curtisqt.com", {
     path: "/socket.io/",
     transports: ["websocket"],
-    timeout: 20000,             
-    reconnectionAttempts: 10,      
-    reconnectionDelay: 2000       
+    timeout: 40000,            
+    reconnectionAttempts: 20,  
+    reconnectionDelay: 2000    
 });
-
 
 console.log("[DEBUG] Attempting WebSocket Connection...");
 
@@ -35,11 +34,18 @@ socket.on("connect", () => {
     if (roomId) {
         console.log(`[DEBUG] Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
-    } else {
-        console.error("[DEBUG] No roomId found in session storage.");
     }
+    // } else {
+    //     console.error("[DEBUG] No roomId found in session storage.");
+    // }
 });
 
+// Forge library check
+if (typeof forge === "undefined") {
+    console.error("[ERROR] Forge library is not loaded.");
+} else {
+    console.log("[DEBUG] Forge library loaded successfully.");
+}
 
 socket.on("rate_limit", (data) => alert(data.msg));
 
@@ -55,11 +61,114 @@ socket.on("room_invalid", (data) => {
     window.location.href = "/dashboard";
 });
 
+fetch("/get_private_key", { method: "POST" })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log("[DEBUG] Private Key Received:", data.private_key);
+            const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n'); // 🔹 Fix formatting
+            sessionStorage.setItem("private_key", formattedKey);
+        } else {
+            console.error("[ERROR] Failed to retrieve private key:", data.message);
+        }
+    })
+    .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
+
+fetch("/generate_aes_key", { method: "POST" })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log("[DEBUG] Encrypted AES Key Received:", data.encrypted_aes_key);
+            const aesKey = decryptAESKey(data.encrypted_aes_key); 
+            if (!aesKey) {
+                console.error("[ERROR] Decrypted AES key is null.");
+            } else {
+                console.log("[DEBUG] AES Key decrypted successfully.");
+                sessionStorage.setItem("aes_key", aesKey); 
+            }
+        }
+    });
+
+    function decryptAESKey(encryptedKey) {
+        console.log("[DEBUG] Decrypting AES Key:", encryptedKey);
+        try {
+            const privateKeyPEM = sessionStorage.getItem("private_key");
+            if (!privateKeyPEM) {
+                throw new Error("Private key not found in sessionStorage.");
+            }
+            const formattedKey = privateKeyPEM.trim().replace(/\r?\n|\r/g, '\n');
+    
+            if (!formattedKey.includes("-----BEGIN PRIVATE KEY-----") || 
+                !formattedKey.includes("-----END PRIVATE KEY-----")) {
+                throw new Error("Private key format is invalid or incomplete.");
+            }
+            const privateKey = forge.pki.privateKeyFromPem(formattedKey);
+            const decodedKey = forge.util.decode64(encryptedKey.trim());
+            if (!decodedKey || decodedKey.length === 0) {
+                throw new Error("Decoded AES key is empty or invalid.");
+            }
+            const decryptedKey = privateKey.decrypt(decodedKey, 'RSA-OAEP', {
+                md: forge.md.sha256.create()
+            });
+            if (!decryptedKey || decryptedKey.length !== 32) {
+                console.error("[ERROR] Decrypted AES key size mismatch. Expected 32 bytes.");
+                return null;
+            }
+            console.log("[DEBUG] AES Key decrypted successfully.");
+            const aesKeyB64 = CryptoJS.enc.Base64.stringify(CryptoJS.enc.Utf8.parse(decryptedKey));
+            sessionStorage.setItem("aes_key", aesKeyB64);
+            return aesKeyB64;
+        } catch (error) {
+            console.error("[ERROR] Failed to decrypt AES key:", error.message);
+            return null;
+        }
+    }
+    
+    
+    
+function decryptMessage(encryptedMsg) {
+    const aesKeyBase64 = sessionStorage.getItem("aes_key");
+    if (!aesKeyBase64) {
+        console.error("[ERROR] AES key not found in sessionStorage.");
+        return "[ERROR] Failed to decrypt message.";
+    }
+    const aesKey = CryptoJS.enc.Base64.parse(aesKeyBase64);
+    if (aesKey.sigBytes !== 32) {
+        console.error("[ERROR] AES Key size mismatch. Expected 32 bytes.");
+        return "[ERROR] AES Key size invalid.";
+    }
+    try {
+        const decodedData = CryptoJS.enc.Base64.parse(encryptedMsg).toString(CryptoJS.enc.Utf8);
+        if (decodedData.length < 16) {
+            console.error("[ERROR] Encrypted data is too short for IV + Ciphertext.");
+            return "[ERROR] Invalid encrypted message format.";
+        }
+        const iv = CryptoJS.enc.Utf8.parse(decodedData.substring(0, 16));
+        const ciphertext = decodedData.substring(16);
+        const decryptedBytes = CryptoJS.AES.decrypt(
+            { ciphertext: CryptoJS.enc.Base64.parse(ciphertext) },
+            aesKey,
+            {
+                iv: iv,
+                mode: CryptoJS.mode.CFB,
+                padding: CryptoJS.pad.NoPadding
+            }
+        );
+        const decryptedMsg = decryptedBytes.toString(CryptoJS.enc.Utf8);
+        if (!decryptedMsg) throw new Error("Decrypted message is empty.");
+        return decodeURIComponent(decryptedMsg);
+    } catch (error) {
+        console.error("[ERROR] Decryption failed:", error);
+        return "[ERROR] Failed to decrypt message.";
+    }
+}
+
 // Handle incoming messages
 socket.on("message", (data) => {
-    console.log("[DEBUG] Received message:", data);
-    appendMessage(data.user, data.msg, false);
+    const decryptedMsg = decryptMessage(data.msg);
+    appendMessage(data.user, decryptedMsg, false);
 });
+
 socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
 socket.on("user_left", (data) => appendMessage(null, data.msg, true));
 
@@ -321,31 +430,54 @@ function setupEmojiPicker() {
     });
 }
 
+// Ensure keys are fetched and stored securely
+function fetchPrivateKey() {
+    fetch("/get_private_key", { method: "POST" })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log("[DEBUG] Private Key Received:", data.private_key);
+                const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n'); 
+                sessionStorage.setItem("private_key", formattedKey);
+            } else {
+                console.error("[ERROR] Failed to retrieve private key:", data.message);
+            }
+        })
+        .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
+}
+
+// Clear stale keys on refresh
+window.addEventListener("load", () => {
+    sessionStorage.removeItem("private_key");
+    sessionStorage.removeItem("aes_key");
+    console.log("[DEBUG] Cleared stale keys on refresh.");
+    fetchPrivateKey();
+});
+
 let lastMessageTime = 0;
 
 // Function to send a message
 function sendMessage() {
     console.log("[DEBUG] sendMessage() triggered");
+
     const messageInput = document.getElementById("messageInput");
-    const message = messageInput.value.trim();
+    const message = encodeURIComponent(messageInput.value.trim());
 
     if (!roomId || roomId === "None") {
+        console.warn("[DEBUG] No roomId found. Aborting message.");
         alert("You're not in a room. Please join one first.");
         return;
     }
+
     if (!message || message.length > 150) {
+        console.warn("[DEBUG] Invalid message length. Aborting.");
         alert("Message must be between 1 and 150 characters.");
         return;
     }
 
-    const now = Date.now();
-    if (now - lastMessageTime < 1000) {
-        alert("You're sending messages too fast! Please wait.");
-        return;
-    }
-
-    lastMessageTime = now;
+    console.log(`[DEBUG] Sending Message: "${message}"`);
     socket.emit("message", { user: username, msg: message, roomId: roomId });
+
     messageInput.value = "";
     document.getElementById("charCount").textContent = "150 characters remaining";
 }

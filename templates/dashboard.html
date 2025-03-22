@@ -4,16 +4,19 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>CurtisConnect</title>
+        <!-- CSS -->
         <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-        <!-- Socket.io -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
-        <!-- client.js -->
-        <script src="{{ url_for('static', filename='client.js') }}"></script>
-        <!-- Emoji Mart -->
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
-        <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
-        <!-- Marked.js -->
+        <!-- Library Dependencies -->
+        <!-- Core Libraries -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/forge/1.3.1/forge.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+        <!-- Utility Libraries -->
         <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+        <!-- Client-side logic -->
+        <script src="{{ url_for('static', filename='client.js') }}"></script>
     </head>
 <body>
     <div class="app-container">

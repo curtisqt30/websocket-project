@@ -17,6 +17,11 @@ import bcrypt
 from datetime import datetime
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import base64
 
 # Flask setup
 app = Flask(__name__)
@@ -28,6 +33,102 @@ app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 Session(app)
+
+# RSA Key Managment
+def load_rsa_keys():
+    with open("private_key.pem", "rb") as f:
+        private_key = serialization.load_pem_private_key(f.read(), password=None)
+    with open("public_key.pem", "rb") as f:
+        public_key = serialization.load_pem_public_key(f.read())
+    return private_key, public_key
+
+def generate_rsa_keys():
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+    public_key = private_key.public_key()
+    with open("private_key.pem", "wb") as f:
+        private_key_bytes = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        print("[DEBUG] Generated Private Key:", private_key_bytes.decode())
+        f.write(private_key_bytes)
+    with open("public_key.pem", "wb") as f:
+        public_key_bytes = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        print("[DEBUG] Generated Public Key:", public_key_bytes.decode())
+        f.write(public_key_bytes)
+
+print("[INFO] RSA keys generated successfully.")
+
+generate_rsa_keys()
+private_key, rsa_public_key = load_rsa_keys()
+
+# AES-256 Encryption
+session_keys = {}
+
+@app.route("/generate_aes_key", methods=["POST"])
+def generate_aes_key():
+    username = session.get("username")
+    if not username:
+        return jsonify({"success": False, "message": "User not authenticated."})
+    aes_key = os.urandom(32)
+    session_keys[username] = aes_key
+    try:
+        encrypted_aes_key = rsa_public_key.encrypt(
+            aes_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        print("[DEBUG] AES Key successfully encrypted:", base64.b64encode(encrypted_aes_key).decode())
+        return jsonify({
+            "success": True,
+            "encrypted_aes_key": base64.b64encode(encrypted_aes_key).decode()
+        })
+    except Exception as e:
+        print(f"[ERROR] AES Key encryption failed: {e}")
+        return jsonify({"success": False, "message": "AES Key encryption failed."})
+
+def encrypt_message(message, aes_key):
+    iv = os.urandom(16)
+    cipher = Cipher(algorithms.AES(aes_key), modes.CFB8(iv))
+    encryptor = cipher.encryptor()
+    encrypted_data = iv + encryptor.update(message.encode()) + encryptor.finalize()
+    return base64.b64encode(encrypted_data).decode()
+
+def decrypt_message(encrypted_message, aes_key):
+    try:
+        decoded_data = base64.b64decode(encrypted_message)
+        iv = decoded_data[:16]
+        cipher = Cipher(algorithms.AES(aes_key), modes.CFB8(iv))
+        decryptor = cipher.decryptor()
+        decrypted_data = decryptor.update(decoded_data[16:]) + decryptor.finalize()
+        return decrypted_data.decode()
+    except Exception:
+        return "[ERROR] Unable to decrypt message."
+
+@app.route("/get_private_key", methods=["POST"])
+def get_private_key():
+    if "username" not in session:
+        return jsonify({"success": False, "message": "User not authenticated."})
+    try:
+        with open("private_key.pem", "r") as f:
+            private_key = f.read().strip()
+        private_key = private_key.replace("\r\n", "\n").strip()
+        if not private_key.startswith("-----BEGIN PRIVATE KEY-----") or \
+           not private_key.endswith("-----END PRIVATE KEY-----"):
+            print("[ERROR] Private key format invalid or incomplete.")
+            return jsonify({"success": False, "message": "Private key invalid."})
+        print("[DEBUG] Private Key Retrieved Successfully.")
+        return jsonify({"success": True, "private_key": private_key})
+    except Exception as e:
+        print(f"[ERROR] Failed to retrieve private key: {e}")
+        return jsonify({"success": False, "message": "Failed to retrieve private key."})
 
 # Uploading files
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB file size limit
@@ -94,26 +195,35 @@ def allowed_file(filename):
 def upload_file():
     if "file" not in request.files:
         return jsonify({"success": False, "message": "No file provided"}), 400
-
     file = request.files["file"]
     if file.filename == "":
         return jsonify({"success": False, "message": "No selected file"}), 400
-
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file.save(file_path)
-        print(f"[INFO] File '{filename}' uploaded successfully.")
-        return jsonify({
-            "success": True,
-            "filename": filename
-        })
-    return jsonify({"success": False, "message": "Invalid file type"}), 400
+        aes_key = session_keys.get(session.get("username"))
+        encrypted_data = encrypt_message(file.read().decode('utf-8', errors='ignore'), aes_key)
+        with open(file_path, "wb") as f:
+            f.write(encrypted_data.encode())
+        print(f"[INFO] File '{filename}' uploaded securely.")
+        return jsonify({"success": True, "filename": filename})
+
+@app.route("/download/<filename>")
+def download_file(filename):
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    # Decrypt file before sending
+    aes_key = session_keys.get(session.get("username"))
+    with open(file_path, "rb") as f:
+        encrypted_data = f.read()
+    decrypted_data = decrypt_message(encrypted_data.decode(), aes_key)
+    response = make_response(decrypted_data)
+    response.headers['Content-Type'] = 'application/octet-stream'
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
 
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
-
 
 def is_ip_blocked(ip):
     if ip in failed_login_attempts:
@@ -294,6 +404,7 @@ def favicon():
 # ----------------------------- WebSocket Events -----
 @socketio.on("connect")
 def handle_connect():
+    print(f"[DEBUG] New Connection SID: {request.sid}")
     ip = get_client_ip()
     # print(f"[DEBUG] Connection Attempt Received from {ip}")
     if "username" not in session:
@@ -320,35 +431,40 @@ def handle_join(data):
     if roomId in rooms:
         join_room(roomId)
         rooms[roomId]["users"].append(username)
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} joined.")
+        print(f"[DEBUG] Room Data After Join: {rooms}")
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
     else:
         print(f"[ERROR] Room {roomId} doesn't exist or was deleted.")
-        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists. Redirecting you to the dashboard."}, room=request.sid)
+        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
 
 @socketio.on("message")
 def handle_message(data):
-    # print(f"[DEBUG] Incoming message data: {data}")
-    global user_last_message_time
+    print(f"[DEBUG] Incoming message data: {data}")
+    print(f"[DEBUG] Session Data: {dict(session)}")
     if "username" not in session:
+        print("[ERROR] No username found in session. Disconnecting client.")
         return
     user = session.get("username", "Guest")
     msg = data.get("msg", "")[:150]
     roomId = data.get("roomId", "").strip().upper()
+    print(f"[DEBUG] User: {user} | Room: {roomId} | Message: {msg}")
     if roomId not in rooms:
         print(f"[ERROR] Room {roomId} doesn't exist.")
-        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists. Redirecting to the dashboard."}, room=request.sid)
+        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
         return
-    # Rate-limit check
-    now = time.time()
-    if request.sid in user_last_message_time and now - user_last_message_time[request.sid] < 1:
-        emit("rate_limit", {"msg": "You're sending messages too fast! Please wait."}, room=request.sid)
+    aes_key = session_keys.get(user)
+    if not aes_key:
+        print(f"[ERROR] AES key missing for user {user}.")
         return
-    user_last_message_time[request.sid] = now
+    print(f"[DEBUG] AES Key for {user}: {aes_key}")
+    try:
+        encrypted_message = encrypt_message(msg, aes_key)
+        print(f"[DEBUG] Encrypted Message Sent: {encrypted_message}")
+    except Exception as e:
+        print(f"[ERROR] Failed to encrypt message: {e}")
+        return
     log_message(roomId, user, msg)
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {user}: {msg}")
-    emit("message", {"user": user, "msg": msg}, room=roomId)
-
+    socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId)
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -418,15 +534,19 @@ class SecureWSGIServer(WSGIServer):
 #         socketio.server.disconnect(sid)
 #         connected_clients.remove(sid)
 
+# @app.before_request
+# def clear_stale_sessions():
+#     if not getattr(app, "_got_first_request", False):
+#         try:
+#             session.clear()
+#             app._got_first_request = True
+#             print("[INFO] Cleared stale sessions on server restart.")
+#         except Exception as e:
+#             print(f"[ERROR] Failed to clear sessions: {e}")
+
 @app.before_request
-def clear_stale_sessions():
-    if not getattr(app, "_got_first_request", False):
-        try:
-            session.clear()
-            app._got_first_request = True
-            print("[INFO] Cleared stale sessions on server restart.")
-        except Exception as e:
-            print(f"[ERROR] Failed to clear sessions: {e}")
+def refresh_session():
+    session.modified = True
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
