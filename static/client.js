@@ -130,36 +130,41 @@ function decryptMessage(encryptedMsg) {
         return "[ERROR] AES Key size invalid.";
     }
     try {
-        const decodedData = CryptoJS.enc.Base64.parse(encryptedMsg);
-        if (decodedData.sigBytes < 16) {
+        const binaryData = new Uint8Array(encryptedMsg);
+        if (binaryData.length < 16) {
             console.error("[ERROR] Encrypted data is too short for IV + Ciphertext.");
             return "[ERROR] Invalid encrypted message format.";
         }
-        const iv = CryptoJS.lib.WordArray.create(decodedData.words.slice(0, 4)); 
-        const ciphertext = CryptoJS.lib.WordArray.create(decodedData.words.slice(4));
+        const iv = binaryData.slice(0, 16);
+        const ciphertext = binaryData.slice(16);
         const decryptedBytes = CryptoJS.AES.decrypt(
-            { ciphertext: ciphertext },
+            { ciphertext: CryptoJS.lib.WordArray.create(ciphertext) },
             CryptoJS.lib.WordArray.create(aesKey),
             {
-                iv: iv,
+                iv: CryptoJS.lib.WordArray.create(iv),
                 mode: CryptoJS.mode.CFB,
                 padding: CryptoJS.pad.NoPadding
             }
         );
         const decryptedMsg = decryptedBytes.toString(CryptoJS.enc.Utf8);
-        if (!decryptedMsg) throw new Error("Decrypted message is empty.");
+
+        if (!decryptedMsg || decryptedMsg.trim() === "") {
+            throw new Error("Decrypted message is empty or corrupted.");
+        }
         return decodeURIComponent(decryptedMsg);
     } catch (error) {
-        console.error("[ERROR] Decryption failed:", error);
+        console.error("[ERROR] Decryption failed:", error.message || error);
         return "[ERROR] Failed to decrypt message.";
     }
 }
 
 // Handle incoming messages
 socket.on("message", (data) => {
-    const decryptedMsg = decryptMessage(data.msg);
+    const encryptedMsg = new Uint8Array(data.msg);
+    const decryptedMsg = decryptMessage(encryptedMsg);
     appendMessage(data.user, decryptedMsg, false);
 });
+
 
 socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
 socket.on("user_left", (data) => appendMessage(null, data.msg, true));
@@ -487,8 +492,12 @@ function sendMessage() {
     }
 
     console.log(`[DEBUG] Sending Message: "${message}"`);
-    socket.emit("message", { user: username, msg: message, roomId: roomId });
-
+    socket.emit("message", { 
+        user: username, 
+        msg: new TextEncoder().encode(message),
+        roomId: roomId
+    });
+    
     messageInput.value = "";
     document.getElementById("charCount").textContent = "150 characters remaining";
 }

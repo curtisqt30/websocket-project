@@ -40,40 +40,56 @@ def load_rsa_keys():
         with open("private_key.pem", "rb") as f:
             key_data = f.read()
             print(f"[DEBUG] Raw Private Key Data (Length: {len(key_data)})")
-            print(key_data.decode())
+        if b"-----BEGIN PRIVATE KEY-----" not in key_data:
+            print("[ERROR] Malformed Private Key. Detected old PKCS#1 format or corrupted data.")
+            raise ValueError("Invalid Key Format")
         private_key = serialization.load_pem_private_key(key_data, password=None)
         with open("public_key.pem", "rb") as f:
             public_key = serialization.load_pem_public_key(f.read())
         return private_key, public_key
+    except FileNotFoundError:
+        print("[WARNING] RSA keys not found. Generating new keys...")
+        generate_rsa_keys()
+        return load_rsa_keys()
     except Exception as e:
         print(f"[ERROR] Failed to load private key: {e}")
         raise e
 
 def generate_rsa_keys():
-    if not os.path.exists("private_key.pem") or not os.path.exists("public_key.pem"):
+    try:
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
         public_key = private_key.public_key()
         private_key_bytes = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
         public_key_bytes = public_key.public_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
-        if len(private_key_bytes) < 1700 or len(public_key_bytes) < 400:
-            print("[ERROR] Key generation failed. Retrying...")
-            generate_rsa_keys()
-            return
         with open("private_key.pem", "wb") as f:
             f.write(private_key_bytes)
         with open("public_key.pem", "wb") as f:
             f.write(public_key_bytes)
-        print("[INFO] RSA keys generated successfully.")
+        print("[SUCCESS] RSA keys generated successfully.")
+    except Exception as e:
+        print(f"[ERROR] Failed to generate RSA keys: {e}")
 
-generate_rsa_keys()
-private_key, rsa_public_key = load_rsa_keys()
+# RSA keys loading
+try:
+    private_key, rsa_public_key = load_rsa_keys()
+except FileNotFoundError:
+    print("[WARNING] RSA keys not found. Please run ./reset_project.sh to generate them.")
+    exit(1)
+
+# RSA Key Logging
+def get_rsa_fingerprint(key):
+    return hashlib.sha256(
+        key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    ).hexdigest()
+
+print(f"[DEBUG] RSA Public Key Fingerprint: {get_rsa_fingerprint(rsa_public_key)}")
 
 # AES-256 Encryption
 session_keys = {}
@@ -83,8 +99,9 @@ def generate_aes_key():
     username = session.get("username")
     if not username:
         return jsonify({"success": False, "message": "User not authenticated."})
-    aes_key = os.urandom(32)  # AES-256 requires a 32-byte key
+    aes_key = os.urandom(32)
     session_keys[username] = aes_key
+    print(f"[DEBUG] Raw AES Key (32 bytes): {aes_key.hex()}")
     try:
         encrypted_aes_key = rsa_public_key.encrypt(
             aes_key,
@@ -94,8 +111,15 @@ def generate_aes_key():
                 label=None
             )
         )
+        decrypted_aes_key = private_key.decrypt(encrypted_aes_key, padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        ))
+        if decrypted_aes_key != aes_key:
+            print("[ERROR] AES Key Mismatch! Corruption detected before transmission.")
+            return jsonify({"success": False, "message": "AES Key verification failed."})
         encrypted_key_b64 = base64.b64encode(encrypted_aes_key).decode()
-        print(f"[DEBUG] AES Key (Raw, 32 bytes): {aes_key}")
         print(f"[DEBUG] Encrypted AES Key (Length: {len(encrypted_key_b64)}): {encrypted_key_b64}")
 
         return jsonify({
@@ -107,21 +131,23 @@ def generate_aes_key():
         return jsonify({"success": False, "message": "AES Key encryption failed."})
 
 def encrypt_message(message, aes_key):
+    if not isinstance(message, bytes):
+        raise TypeError("Message must be in bytes for encryption.")
     iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(aes_key), modes.CFB8(iv))
     encryptor = cipher.encryptor()
-    encrypted_data = iv + encryptor.update(message.encode('utf-8')) + encryptor.finalize()
-    return base64.b64encode(encrypted_data).decode('utf-8')
+    encrypted_data = iv + encryptor.update(message) + encryptor.finalize()
+    return encrypted_data
 
 def decrypt_message(encrypted_message, aes_key):
     try:
-        decoded_data = base64.b64decode(encrypted_message)
-        iv = decoded_data[:16]
+        iv = encrypted_message[:16]
         cipher = Cipher(algorithms.AES(aes_key), modes.CFB8(iv))
         decryptor = cipher.decryptor()
-        decrypted_data = decryptor.update(decoded_data[16:]) + decryptor.finalize()
-        return decrypted_data.decode()
-    except Exception:
+        decrypted_data = decryptor.update(encrypted_message[16:]) + decryptor.finalize()
+        return decrypted_data.decode('utf-8', errors='ignore')
+    except Exception as e:
+        print(f"[ERROR] AES Decryption failed: {e}")
         return "[ERROR] Unable to decrypt message."
 
 @app.route("/get_private_key", methods=["POST"])
@@ -157,7 +183,9 @@ app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
 logging.getLogger("gevent.ssl").setLevel(logging.ERROR)
 logging.getLogger("engineio.server").setLevel(logging.CRITICAL)
-logging.getLogger("socketio").setLevel(logging.CRITICAL)
+logging.getLogger("socketio").setLevel(logging.DEBUG)
+logging.getLogger("engineio").setLevel(logging.DEBUG)
+
 
 LOGS_FOLDER = "chat_logs"
 if not os.path.exists(LOGS_FOLDER):
@@ -214,11 +242,15 @@ def upload_file():
         filename = secure_filename(file.filename)
         file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         aes_key = session_keys.get(session.get("username"))
-        encrypted_data = encrypt_message(file.read().decode('utf-8', errors='ignore'), aes_key)
-        with open(file_path, "wb") as f:
-            f.write(encrypted_data.encode())
-        print(f"[INFO] File '{filename}' uploaded securely.")
-        return jsonify({"success": True, "filename": filename})
+        try:
+            encrypted_data = encrypt_message(file.read(), aes_key)  
+            with open(file_path, "wb") as f:
+                f.write(encrypted_data)
+            print(f"[INFO] File '{filename}' uploaded securely.")
+            return jsonify({"success": True, "filename": filename})
+        except Exception as e:
+            print(f"[ERROR] Failed to encrypt or write file: {e}")
+            return jsonify({"success": False, "message": "File upload failed."})
 
 @app.route("/download/<filename>")
 def download_file(filename):
@@ -452,14 +484,11 @@ def handle_join(data):
 @socketio.on("message")
 def handle_message(data):
     print(f"[DEBUG] Incoming message data: {data}")
-    print(f"[DEBUG] Session Data: {dict(session)}")
     if "username" not in session:
         print("[ERROR] No username found in session. Disconnecting client.")
         return
     user = session.get("username", "Guest")
-    msg = data.get("msg", "")[:150]
     roomId = data.get("roomId", "").strip().upper()
-    print(f"[DEBUG] User: {user} | Room: {roomId} | Message: {msg}")
     if roomId not in rooms:
         print(f"[ERROR] Room {roomId} doesn't exist.")
         emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
@@ -468,15 +497,12 @@ def handle_message(data):
     if not aes_key:
         print(f"[ERROR] AES key missing for user {user}.")
         return
-    print(f"[DEBUG] AES Key for {user}: {aes_key}")
     try:
-        encrypted_message = encrypt_message(msg, aes_key)
-        print(f"[DEBUG] Encrypted Message Sent: {encrypted_message}")
+        message = data.get("msg", "").encode('utf-8') if isinstance(data.get("msg"), str) else data.get("msg")
+        encrypted_message = encrypt_message(message, aes_key)
+        socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId)
     except Exception as e:
         print(f"[ERROR] Failed to encrypt message: {e}")
-        return
-    log_message(roomId, user, msg)
-    socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId)
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -556,12 +582,17 @@ class SecureWSGIServer(WSGIServer):
 #         except Exception as e:
 #             print(f"[ERROR] Failed to clear sessions: {e}")
 
+@app.route("/clear_keys_cache", methods=["POST"])
+def clear_keys_cache():
+    print("[INFO] Forcing client-side key refresh...")
+    return jsonify({"success": True, "message": "Client cache refresh triggered."})
+
 @app.before_request
 def refresh_session():
     session.modified = True
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
-    print("Starting server for WSS only...")
+    print("[SUCCESS] Starting server for WSS only...")
     http_server = SecureWSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler)
     http_server.serve_forever()
