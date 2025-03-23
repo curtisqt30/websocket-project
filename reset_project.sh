@@ -12,6 +12,15 @@ else
     echo "[INFO] RSA keys already exist. Skipping regeneration."
 fi
 
+# Only delete and regenerate Log AES key if missing
+if [ ! -f log_aes_key.bin ]; then
+    echo "[INFO] Generating Log AES key..."
+    openssl rand -out log_aes_key.bin 32
+    chmod 600 log_aes_key.bin
+else
+    echo "[INFO] Log AES key already exists. Skipping regeneration."
+fi
+
 # Ensure Nginx test only runs if necessary
 echo "[INFO] Testing Nginx configuration..."
 if sudo nginx -t; then
@@ -27,3 +36,5 @@ sudo pkill -f python || echo "[INFO] No active Python processes found."
 
 echo "[INFO] Starting Flask application..."
 sudo $(which python3) app.py
+
+echo "[INFO] Project reset successfully."

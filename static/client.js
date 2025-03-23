@@ -40,13 +40,6 @@ socket.on("connect", () => {
     // }
 });
 
-// Forge library check
-if (typeof forge === "undefined") {
-    console.error("[ERROR] Forge library is not loaded.");
-} else {
-    console.log("[DEBUG] Forge library loaded successfully.");
-}
-
 socket.on("rate_limit", (data) => alert(data.msg));
 
 socket.on("force_disconnect", (data) => {
@@ -65,8 +58,7 @@ fetch("/get_private_key", { method: "POST" })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            console.log("[DEBUG] Private Key Received:", data.private_key);
-            const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n'); // 🔹 Fix formatting
+            const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n');
             sessionStorage.setItem("private_key", formattedKey);
         } else {
             console.error("[ERROR] Failed to retrieve private key:", data.message);
@@ -78,91 +70,100 @@ fetch("/generate_aes_key", { method: "POST" })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            console.log("[DEBUG] Encrypted AES Key Received:", data.encrypted_aes_key);
-            const aesKey = decryptAESKey(data.encrypted_aes_key); 
-            if (!aesKey) {
-                console.error("[ERROR] Decrypted AES key is null.");
-            } else {
-                console.log("[DEBUG] AES Key decrypted successfully.");
-                sessionStorage.setItem("aes_key", aesKey); 
-            }
+            decryptAESKey(data.encrypted_aes_key); 
+        } else {
+            console.error("[ERROR] Failed to generate AES key:", data.message);
         }
     });
 
-function decryptAESKey(encryptedKey) {
-    console.log("[DEBUG] Decrypting AES Key:", encryptedKey);
+async function decryptAESKey(encryptedKeyBase64) {
     try {
-        const privateKeyPEM = sessionStorage.getItem("private_key");
-        if (!privateKeyPEM) {
-            throw new Error("Private key not found in sessionStorage.");
-        }
-        const formattedKey = privateKeyPEM.trim().replace(/\r?\n|\r/g, '\n');
-        const privateKey = forge.pki.privateKeyFromPem(formattedKey);
-        const decodedKey = forge.util.decode64(encryptedKey.trim());
-        console.log("[DEBUG] Decoded AES Key Length Before Decryption:", decodedKey.length);
-        const decryptedKey = privateKey.decrypt(decodedKey, 'RSA-OAEP', {
-            md: forge.md.sha256.create()
-        });
-        console.log("[DEBUG] Decrypted AES Key Length After Decryption:", decryptedKey.length);
-        if (!decryptedKey || decryptedKey.length !== 32) {
-            console.error("[ERROR] AES Key size mismatch. Expected 32 bytes.");
-            return null;
-        }
-        const aesKeyB64 = forge.util.encode64(decryptedKey);  
+        const privateKeyPEM = sessionStorage.getItem("private_key")
+            .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, '');
+        const privateKeyDer = Uint8Array.from(atob(privateKeyPEM), c => c.charCodeAt(0));
+        const privateKey = await crypto.subtle.importKey(
+            "pkcs8",
+            privateKeyDer.buffer,
+            { name: "RSA-OAEP", hash: "SHA-256" },
+            false,
+            ["decrypt"]
+        );
+        const encryptedKey = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
+        const decryptedKey = await crypto.subtle.decrypt(
+            { name: "RSA-OAEP" },
+        privateKey,
+            encryptedKey
+        );
+        const aesKeyB64 = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
         sessionStorage.setItem("aes_key", aesKeyB64);
-        console.log("[DEBUG] AES Key decrypted successfully.");
         return aesKeyB64;
     } catch (error) {
-        console.error("[ERROR] Failed to decrypt AES key:", error.message);
+        console.error("[ERROR] decryptAESKey failed:", error);
         return null;
     }
 }
-    
-function decryptMessage(encryptedMsg) {
-    const aesKeyBase64 = sessionStorage.getItem("aes_key");
-    if (!aesKeyBase64) {
-        console.error("[ERROR] AES key not found in sessionStorage.");
-        return "[ERROR] Failed to decrypt message.";
-    }
-    const aesKey = new Uint8Array(JSON.parse(aesKeyBase64));
-    if (aesKey.length !== 32) {
-        console.error("[ERROR] AES Key size mismatch. Expected 32 bytes.");
-        return "[ERROR] AES Key size invalid.";
-    }
+
+async function decryptMessage(encryptedMsgBase64) {
     try {
-        const binaryData = encryptedMsg;
-        if (binaryData.length < 16) {
-            console.error("[ERROR] Encrypted data is too short for IV + Ciphertext.");
-            return "[ERROR] Invalid encrypted message format.";
-        }
-        const iv = binaryData.slice(0, 16);
-        const ciphertext = binaryData.slice(16);
-        const decryptedBytes = CryptoJS.AES.decrypt(
-            { ciphertext: CryptoJS.lib.WordArray.create(ciphertext) },
-            CryptoJS.lib.WordArray.create(aesKey),
-            {
-                iv: CryptoJS.lib.WordArray.create(iv),
-                mode: CryptoJS.mode.CFB,
-                padding: CryptoJS.pad.NoPadding
-            }
+        const aesKeyBase64 = sessionStorage.getItem("aes_key");
+        const aesKey = await crypto.subtle.importKey(
+            'raw',
+            Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+            { name: 'AES-GCM' },
+            false,
+            ['decrypt']
         );
-        const decryptedMsg = decryptedBytes.toString(CryptoJS.enc.Utf8);
-        if (!decryptedMsg || decryptedMsg.trim() === "") {
-            throw new Error("Decrypted message is empty or corrupted.");
-        }
-        return decodeURIComponent(decryptedMsg);
+        const encryptedData = Uint8Array.from(atob(encryptedMsgBase64), c => c.charCodeAt(0));
+        const iv = encryptedData.slice(0, 12);
+        const ciphertext = encryptedData.slice(12);
+        const decryptedArrayBuffer = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv },
+            aesKey,
+            ciphertext
+        );
+        const decryptedText = new TextDecoder().decode(decryptedArrayBuffer);
+        return decryptedText;
     } catch (error) {
-        console.error("[ERROR] Decryption failed:", error.message || error);
-        return "[ERROR] Failed to decrypt message.";
+        console.error("[ERROR] decryptMessage failed:", error);
+        return "[ERROR] Unable to decrypt message.";
     }
 }
 
+async function encryptMessage(plainText) {
+    const aesKeyBase64 = sessionStorage.getItem("aes_key");
+    const aesKey = await crypto.subtle.importKey(
+        'raw',
+        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedContent = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        aesKey,
+        new TextEncoder().encode(plainText)
+    );
+    const encryptedArray = new Uint8Array(encryptedContent);
+    const combined = new Uint8Array(iv.byteLength + encryptedArray.byteLength);
+    combined.set(iv, 0);
+    combined.set(encryptedArray, iv.byteLength);
+    return btoa(String.fromCharCode(...combined));
+}
 
 // Handle incoming messages
-socket.on("message", (data) => {
-    const encryptedMsg = new Uint8Array(data.msg);
-    const decryptedMsg = decryptMessage(encryptedMsg);
-    appendMessage(data.user, decryptedMsg, false);
+socket.on("message", async (data) => {
+    const decryptedMsg = await decryptMessage(data.msg);
+    try {
+        const msgObject = JSON.parse(decryptedMsg);
+        if (msgObject.type === 'file') {
+            appendFileMessage(data.user, msgObject);
+        } else {
+            appendMessage(data.user, decryptedMsg, false);
+        }
+    } catch (error) {
+        appendMessage(data.user, decryptedMsg, false);
+    }
 });
 
 socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
@@ -229,7 +230,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // Character count functionality
     messageInput.addEventListener("input", updateCharCount);
     function updateCharCount() {
-        const remaining = maxChars - messageInput.value.length;
+        const remaining = maxChars - [...messageInput.value].length; 
         charCount.textContent = `${remaining} characters remaining`;
     }
 
@@ -262,30 +263,35 @@ document.addEventListener("DOMContentLoaded", function () {
     uploadButton.addEventListener("click", () => {
         const fileInput = document.createElement("input");
         fileInput.type = "file";
-        fileInput.addEventListener("change", (event) => {
+        fileInput.addEventListener("change", async (event) => {
             const file = event.target.files[0];
             if (!file) return;
-            // Early size check (8MB limit)
             if (file.size > 8 * 1024 * 1024) {
-                alert("File size exceeds the 8MB limit. Please upload a smaller file.");
+                alert("File size exceeds 8MB.");
                 return;
             }
             const formData = new FormData();
             formData.append("file", file);
-            fetch("/upload", {
-                method: "POST",
-                body: formData,
-            })
-            .then(response => response.json())
-            .then(data => {
+            try {
+                const response = await fetch("/upload", {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await response.json();
                 if (data.success) {
-                    const fileLink = `<a href="/uploads/${data.filename}" target="_blank">${data.filename}</a>`;
-                    socket.emit("message", { user: username, msg: fileLink, roomId: roomId });
+                    const fileMessage = JSON.stringify({
+                        type: 'file',
+                        filename: data.filename,
+                        url: `/uploads/${data.filename}`
+                    });
+                    const encryptedFileMsg = await encryptMessage(fileMessage);
+                    socket.emit("message", { user: username, msg: encryptedFileMsg, roomId });
                 } else {
                     alert(data.message);
                 }
-            })
-            .catch((error) => console.error("[ERROR] Upload failed:", error));
+            } catch (error) {
+                console.error("[ERROR] Upload failed:", error);
+            }
         });
         fileInput.click();
     });
@@ -317,7 +323,12 @@ function appendMessage(user, msg, isSystemMessage = false) {
     if (isSystemMessage) {
         messageElement.innerHTML = `<div style="font-style: italic;">${msg}</div>`;
     } else {
-        const cleanMsg = marked.parse(msg).replace(/<p>|<\/p>/g, '');
+        let cleanMsg = msg;
+        if (!msg || msg.startsWith("[ERROR]")) {
+            cleanMsg = "<em>[Could not decrypt this message]</em>";
+        } else {
+            cleanMsg = marked.parse(msg).replace(/<p>|<\/p>/g, '');
+        }
         messageElement.innerHTML = `<div>
             <strong>[${timestamp}] ${user}:</strong> 
             <span>${cleanMsg}</span>
@@ -327,23 +338,39 @@ function appendMessage(user, msg, isSystemMessage = false) {
     messages.scrollTop = messages.scrollHeight;
 }
 
+function appendFileMessage(user, msgObject) {
+    const messages = document.getElementById("messages");
+    const messageElement = document.createElement("div");
+    const timestamp = new Date().toLocaleTimeString();
+    let fileContent;
+    if (/\.(jpg|jpeg|png|gif)$/i.test(msgObject.filename)) {
+        fileContent = `<img src="${msgObject.url}" alt="${msgObject.filename}" style="max-width:300px; border:1px solid #ccc;">`;
+    } else if (/\.pdf$/i.test(msgObject.filename)) {
+        fileContent = `<a href="${msgObject.url}" target="_blank">📄 ${msgObject.filename}</a>`;
+    } else {
+        fileContent = `<a href="${msgObject.url}" target="_blank">${msgObject.filename}</a>`;
+    }
+    messageElement.innerHTML = `<div>
+        <strong>[${timestamp}] ${user}:</strong>
+        <span>${fileContent}</span>
+    </div>`;
+    messages.appendChild(messageElement);
+    messages.scrollTop = messages.scrollHeight;
+}
+
 // Function to add room to sidebar
 function addRoomToSidebar(roomId) {
     const roomItem = document.createElement("div");
     roomItem.classList.add("room-item");
-
     const roomText = document.createElement("span");
     roomText.textContent = `Room: ${roomId}`;
-
     const removeButton = document.createElement("button");
     removeButton.textContent = "❌";
     removeButton.classList.add("remove-room-btn");
-
     removeButton.addEventListener("click", () => {
         removeRoom(roomId);
         roomItem.remove();
     });
-
     roomItem.appendChild(roomText);
     roomItem.appendChild(removeButton);
     document.getElementById("roomList").appendChild(roomItem);
@@ -372,7 +399,6 @@ function createRoom() {
         alert(`You can only have a maximum of ${maxRooms} rooms.`);
         return;
     }
-
     fetch("/create-room", {
         method: "POST",
         headers: {
@@ -414,40 +440,28 @@ function setupEmojiPicker() {
         },
         theme: 'auto'
     });
-
     const emojiPickerContainer = document.getElementById('emoji-picker-container');
     emojiPickerContainer.appendChild(picker);
-
     const emojiButton = document.getElementById('emojiButton');
     emojiButton.addEventListener('click', (event) => {
-        event.stopPropagation();  // Prevent immediate close
+        event.stopPropagation();
         emojiPickerContainer.style.display =
             emojiPickerContainer.style.display === 'none' ? 'block' : 'none';
     });
 }
 
 // Ensure keys are fetched and stored securely
-function fetchPrivateKey() {
-    fetch("/get_private_key", { method: "POST" })
+fetch("/get_private_key", { method: "POST" })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            console.log("[DEBUG] Private Key Received:", data.private_key);
             const formattedKey = data.private_key.trim().replace(/\r?\n|\r/g, '\n');
-            
-            if (!formattedKey.includes("-----BEGIN PRIVATE KEY-----") || 
-                !formattedKey.includes("-----END PRIVATE KEY-----")) {
-                console.error("[ERROR] Private key format is invalid or incomplete.");
-                return;
-            }
-
             sessionStorage.setItem("private_key", formattedKey);
         } else {
             console.error("[ERROR] Failed to retrieve private key:", data.message);
         }
     })
     .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
-}
 
 // Clear stale keys on refresh
 window.addEventListener("load", () => {
@@ -462,8 +476,6 @@ window.addEventListener("load", () => {
             .then(data => {
                 if (data.success) {
                     decryptAESKey(data.encrypted_aes_key);
-                } else {
-                    console.error("[ERROR] Failed to fetch AES key.");
                 }
             });
     }
@@ -472,25 +484,19 @@ window.addEventListener("load", () => {
 let lastMessageTime = 0;
 
 // Function to send a message
-function sendMessage() {
-    console.log("[DEBUG] sendMessage() triggered");
+async function sendMessage() {
     const messageInputElement = document.getElementById("messageInput");
     const message = messageInputElement.value.trim();
     if (!roomId || roomId === "None") {
-        console.warn("[DEBUG] No roomId found. Aborting message.");
         alert("You're not in a room. Please join one first.");
         return;
     }
-
     if (!message || message.length > 150) {
-        console.warn("[DEBUG] Invalid message length. Aborting.");
         alert("Message must be between 1 and 150 characters.");
         return;
     }
-    const encoder = new TextEncoder();
-    const messageBuffer = encoder.encode(messageInput);
-    console.log(`[DEBUG] Sending Message: "${messageInput}" as Buffer`);
-    socket.emit("message", { user: username, msg: messageBuffer, roomId: roomId });
-    document.getElementById("messageInput").value = "";
+    const encryptedMsg = await encryptMessage(message);
+    socket.emit("message", { user: username, msg: encryptedMsg, roomId });
+    messageInputElement.value = "";
     document.getElementById("charCount").textContent = "150 characters remaining";
 }
