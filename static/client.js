@@ -124,13 +124,13 @@ function decryptMessage(encryptedMsg) {
         console.error("[ERROR] AES key not found in sessionStorage.");
         return "[ERROR] Failed to decrypt message.";
     }
-    const aesKey = forge.util.decode64(aesKeyBase64);
+    const aesKey = new Uint8Array(JSON.parse(aesKeyBase64));
     if (aesKey.length !== 32) {
         console.error("[ERROR] AES Key size mismatch. Expected 32 bytes.");
         return "[ERROR] AES Key size invalid.";
     }
     try {
-        const binaryData = new Uint8Array(encryptedMsg);
+        const binaryData = encryptedMsg;
         if (binaryData.length < 16) {
             console.error("[ERROR] Encrypted data is too short for IV + Ciphertext.");
             return "[ERROR] Invalid encrypted message format.";
@@ -147,7 +147,6 @@ function decryptMessage(encryptedMsg) {
             }
         );
         const decryptedMsg = decryptedBytes.toString(CryptoJS.enc.Utf8);
-
         if (!decryptedMsg || decryptedMsg.trim() === "") {
             throw new Error("Decrypted message is empty or corrupted.");
         }
@@ -158,13 +157,13 @@ function decryptMessage(encryptedMsg) {
     }
 }
 
+
 // Handle incoming messages
 socket.on("message", (data) => {
     const encryptedMsg = new Uint8Array(data.msg);
     const decryptedMsg = decryptMessage(encryptedMsg);
     appendMessage(data.user, decryptedMsg, false);
 });
-
 
 socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
 socket.on("user_left", (data) => appendMessage(null, data.msg, true));
@@ -475,10 +474,8 @@ let lastMessageTime = 0;
 // Function to send a message
 function sendMessage() {
     console.log("[DEBUG] sendMessage() triggered");
-
-    const messageInput = document.getElementById("messageInput");
-    const message = encodeURIComponent(messageInput.value.trim());
-
+    const messageInputElement = document.getElementById("messageInput");
+    const message = messageInputElement.value.trim();
     if (!roomId || roomId === "None") {
         console.warn("[DEBUG] No roomId found. Aborting message.");
         alert("You're not in a room. Please join one first.");
@@ -490,14 +487,10 @@ function sendMessage() {
         alert("Message must be between 1 and 150 characters.");
         return;
     }
-
-    console.log(`[DEBUG] Sending Message: "${message}"`);
-    socket.emit("message", { 
-        user: username, 
-        msg: new TextEncoder().encode(message),
-        roomId: roomId
-    });
-    
-    messageInput.value = "";
+    const encoder = new TextEncoder();
+    const messageBuffer = encoder.encode(messageInput);
+    console.log(`[DEBUG] Sending Message: "${messageInput}" as Buffer`);
+    socket.emit("message", { user: username, msg: messageBuffer, roomId: roomId });
+    document.getElementById("messageInput").value = "";
     document.getElementById("charCount").textContent = "150 characters remaining";
 }

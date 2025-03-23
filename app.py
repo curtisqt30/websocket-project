@@ -131,12 +131,10 @@ def generate_aes_key():
         return jsonify({"success": False, "message": "AES Key encryption failed."})
 
 def encrypt_message(message, aes_key):
-    if not isinstance(message, bytes):
-        raise TypeError("Message must be in bytes for encryption.")
     iv = os.urandom(16)
     cipher = Cipher(algorithms.AES(aes_key), modes.CFB8(iv))
     encryptor = cipher.encryptor()
-    encrypted_data = iv + encryptor.update(message) + encryptor.finalize()
+    encrypted_data = iv + encryptor.update(message.encode('utf-8')) + encryptor.finalize()
     return encrypted_data
 
 def decrypt_message(encrypted_message, aes_key):
@@ -498,9 +496,13 @@ def handle_message(data):
         print(f"[ERROR] AES key missing for user {user}.")
         return
     try:
-        message = data.get("msg", "").encode('utf-8') if isinstance(data.get("msg"), str) else data.get("msg")
+        message = data.get("msg", b"")
+        if isinstance(message, str):
+            message = message.decode('utf-8')
+        elif isinstance(message, str):
+            message = message.strip()
         encrypted_message = encrypt_message(message, aes_key)
-        socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId)
+        socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId, binary=True)
     except Exception as e:
         print(f"[ERROR] Failed to encrypt message: {e}")
 
