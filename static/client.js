@@ -582,6 +582,12 @@ async function sendMessage() {
         alert("Message must be between 1 and 150 characters.");
         return;
     }
+    const now = Date.now();
+    if (now - lastMessageTime < 1000) {
+        alert("You're sending messages too fast! Please wait.");
+        return;
+    }
+    lastMessageTime = now;
     const encryptedMsg = await encryptMessage(message);
     socket.emit("message", { user: username, msg: encryptedMsg, roomId });
     messageInputElement.value = "";
