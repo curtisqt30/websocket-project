@@ -424,6 +424,46 @@ def dashboard_page():
         return render_template("dashboard.html", roomId="None")
     return render_template("dashboard.html", roomId=room_code)
 
+@app.route("/get_public_key", methods=["GET"])
+def get_public_key():
+    try:
+        with open("public_key.pem", "r") as f:
+            public_key = f.read().strip()
+        return jsonify({"success": True, "public_key": public_key})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
+# Generate AES key per room
+room_aes_keys = {}
+
+@app.route("/get_room_aes_key/<room_id>", methods=["POST"])
+def get_room_aes_key(room_id):
+    username = session.get("username")
+    if not username:
+        return jsonify({"success": False, "message": "User not authenticated."}), 401
+    user_public_key_pem = request.json.get("user_public_key")
+    if not user_public_key_pem:
+        return jsonify({"success": False, "message": "User public key missing."}), 400
+    try:
+        user_public_key = serialization.load_pem_public_key(user_public_key_pem.encode())
+        aes_key = room_aes_keys.get(room_id)
+        if not aes_key:
+            return jsonify({"success": False, "message": "Room AES key not found."}), 404
+        encrypted_aes_key = user_public_key.encrypt(
+            aes_key,
+            padding.OAEP(
+                mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                algorithm=hashes.SHA256(),
+                label=None
+            )
+        )
+        encrypted_key_b64 = base64.b64encode(encrypted_aes_key).decode()
+        return jsonify({"success": True, "encrypted_room_aes_key": encrypted_key_b64})
+    except Exception as e:
+        print(f"[ERROR] Failed to encrypt AES key: {e}")
+        return jsonify({"success": False, "message": "AES key encryption failed."}), 500
+
+
 @app.route("/create-room", methods=["POST"])
 def create_room():
     if "username" not in session:
@@ -431,8 +471,10 @@ def create_room():
     room_code = generate_room()
     while room_code in rooms:
         room_code = generate_room()
+    aes_key = os.urandom(32)
+    room_aes_keys[room_code] = aes_key
     rooms[room_code] = {"users": []}
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] Created room {room_code}")
+    print(f"[INFO] Created room {room_code}")
     return jsonify({"success": True, "roomId": room_code})
 
 @app.route("/join-room")

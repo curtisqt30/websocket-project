@@ -34,6 +34,7 @@ socket.on("connect", () => {
     if (roomId) {
         console.log(`[DEBUG] Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
+        fetchRoomAESKey(roomId);
     }
     // } else {
     //     console.error("[DEBUG] No roomId found in session storage.");
@@ -75,6 +76,23 @@ fetch("/generate_aes_key", { method: "POST" })
             console.error("[ERROR] Failed to generate AES key:", data.message);
         }
     });
+
+async function getUserPublicKey() {
+    let publicKey = sessionStorage.getItem("public_key");
+    
+    if (!publicKey) {
+        const response = await fetch('/get_public_key');
+        const data = await response.json();
+        
+        if (data.success) {
+            publicKey = data.public_key;
+            sessionStorage.setItem("public_key", publicKey);
+        } else {
+            throw new Error("Failed to fetch public key: " + data.message);
+        }
+    }
+    return publicKey;
+}
 
 async function decryptAESKey(encryptedKeyBase64) {
     try {
@@ -151,9 +169,78 @@ async function encryptMessage(plainText) {
     return btoa(String.fromCharCode(...combined));
 }
 
+async function fetchRoomAESKey(roomId) {
+    const userPublicKey = await getUserPublicKey();
+    const response = await fetch(`/get_room_aes_key/${roomId}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ user_public_key: userPublicKey })
+    });
+    const data = await response.json();
+    if (data.success) {
+        const encryptedAESKey = data.encrypted_room_aes_key;
+        const aesKey = await decryptAESKey(encryptedAESKey); 
+        sessionStorage.setItem(`room_aes_key_${roomId}`, aesKey);
+        console.log(`AES key stored for room ${roomId}`);
+    } else {
+        console.error("Failed to fetch AES key:", data.message);
+    }
+}
+
+async function encryptRoomMessage(roomId, plainText) {
+    const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
+    const aesKey = await crypto.subtle.importKey(
+        'raw',
+        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+    );
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedContent = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        aesKey,
+        new TextEncoder().encode(plainText)
+    );
+    const encryptedArray = new Uint8Array(encryptedContent);
+    const combined = new Uint8Array(iv.byteLength + encryptedArray.byteLength);
+    combined.set(iv, 0);
+    combined.set(encryptedArray, iv.byteLength);
+    return btoa(String.fromCharCode(...combined));
+}
+
+async function decryptRoomMessage(roomId, encryptedMsgBase64) {
+    const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
+    if (!aesKeyBase64) {
+        console.error("AES key not found for this room.");
+        return "[ERROR] Key missing.";
+    }
+    const aesKey = await crypto.subtle.importKey(
+        'raw',
+        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+    );
+    const encryptedData = Uint8Array.from(atob(encryptedMsgBase64), c => c.charCodeAt(0));
+    const iv = encryptedData.slice(0, 12);
+    const ciphertext = encryptedData.slice(12);
+    try {
+        const decryptedArrayBuffer = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv },
+            aesKey,
+            ciphertext
+        );
+        return new TextDecoder().decode(decryptedArrayBuffer);
+    } catch (error) {
+        console.error("[ERROR] decryptMessage failed:", error);
+        return "[ERROR] Unable to decrypt message.";
+    }
+}
+
 // Handle incoming messages
 socket.on("message", async (data) => {
-    const decryptedMsg = await decryptMessage(data.msg);
+    const decryptedMsg = await decryptRoomMessage(roomId, data.msg);
     try {
         const msgObject = JSON.parse(decryptedMsg);
         if (msgObject.type === 'file') {
