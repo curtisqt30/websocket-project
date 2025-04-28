@@ -1,21 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>CurtisConnect</title>
-        <!-- CSS -->
-        <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
-        <!-- Library Dependencies -->
-        <!-- Core Libraries -->
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
-        <!-- Utility Libraries -->
-        <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
-        <!-- Client-side logic -->
-        <script src="{{ url_for('static', filename='client.js') }}"></script>
-    </head>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CurtisConnect</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
+
+    <!-- Core Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+
+    <!-- Utility Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
+
+    <!-- Client-side logic -->
+    <script src="/static/client.js"></script>
+</head>
 <body>
     <div class="app-container">
         <!-- Sidebar for Rooms -->
@@ -28,25 +31,21 @@
 
             <div class="room-list" id="roomList"></div>
 
-            <h1>Chatroom: <span id="roomId">{{ roomId }}</span></h1>
-            {% if roomId != "None" %}
-                <button id="leaveRoomButton" class="leave-btn">🏠 Leave Room</button>
-            {% endif %}
+            <h1>Chatroom: <span id="roomId"></span></h1>
+
+            <button id="leaveRoomButton" class="leave-btn" style="display: none;">🏠 Leave Room</button>
 
             <p><a href="/logout">Logout</a></p>
         </div>
 
         <!-- Main Chat Section -->
         <div class="main-content">
-            <div class="chat-header">
-            </div>
+            <div class="chat-header"></div>
 
             <div id="messages">
-                {% if roomId == "None" %}
-                    <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
-                        You're currently not in a chatroom. Create or join a room using the sidebar.
-                    </p>
-                {% endif %}
+                <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
+                    You're currently not in a chatroom. Create or join a room using the sidebar.
+                </p>
             </div>
 
             <div class="message-input">
@@ -56,10 +55,9 @@
                     <button id="uploadButton">📁 File Upload</button>
                 </div>
                 <button id="sendButton">Send</button>
-            
                 <div id="emoji-picker-container" style="display:none;"></div>
-            </div>            
-            
+            </div>
+
             <p id="charCount">150 characters remaining</p>
         </div>
     </div>

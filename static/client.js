@@ -55,6 +55,11 @@ socket.on("room_invalid", (data) => {
     window.location.href = "/dashboard";
 });
 
+socket.on("presence_update", (onlineUsers) => {
+    console.log("[DEBUG] Online users list received:", onlineUsers);
+    updateOnlineUsersList(onlineUsers);
+});
+
 fetch("/get_private_key", { method: "POST" })
     .then(response => response.json())
     .then(data => {
@@ -359,6 +364,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             const formData = new FormData();
             formData.append("file", file);
+            formData.append("roomId", roomId);
             try {
                 const response = await fetch("/upload", {
                     method: "POST",
@@ -396,6 +402,19 @@ function displayUsername(username) {
     document.querySelector(".sidebar").prepend(usernameDisplay);
 }
 
+function updateOnlineUsersList(users) {
+    let onlineList = document.getElementById("onlineUsersList");
+    
+    if (!onlineList) {
+        onlineList = document.createElement("div");
+        onlineList.id = "onlineUsersList";
+        document.querySelector(".sidebar").appendChild(onlineList);
+    }
+
+    // Clear current list
+    onlineList.innerHTML = "<h3>Online Users:</h3>" + users.map(user => `<p>${user}</p>`).join("");
+}
+
 // Function to load existing rooms
 function loadRooms() {
     const savedRooms = JSON.parse(sessionStorage.getItem("rooms")) || [];
@@ -429,13 +448,20 @@ function appendFileMessage(user, msgObject) {
     const messages = document.getElementById("messages");
     const messageElement = document.createElement("div");
     const timestamp = new Date().toLocaleTimeString();
+    const downloadUrl = `${msgObject.url}?roomId=${roomId}`;
     let fileContent;
     if (/\.(jpg|jpeg|png|gif)$/i.test(msgObject.filename)) {
-        fileContent = `<img src="${msgObject.url}" alt="${msgObject.filename}" style="max-width:300px; border:1px solid #ccc;">`;
+        fileContent = `<img src="${downloadUrl}"
+                          alt="${msgObject.filename}"
+                          style="max-width:300px; border:1px solid #ccc;">`;
     } else if (/\.pdf$/i.test(msgObject.filename)) {
-        fileContent = `<a href="${msgObject.url}" target="_blank">📄 ${msgObject.filename}</a>`;
+        fileContent = `<a href="${downloadUrl}" target="_blank">
+                          📄 ${msgObject.filename}
+                       </a>`;
     } else {
-        fileContent = `<a href="${msgObject.url}" target="_blank">${msgObject.filename}</a>`;
+        fileContent = `<a href="${downloadUrl}" target="_blank">
+                          ${msgObject.filename}
+                       </a>`;
     }
     messageElement.innerHTML = `<div>
         <strong>[${timestamp}] ${user}:</strong>

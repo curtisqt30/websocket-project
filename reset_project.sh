@@ -34,7 +34,8 @@ fi
 echo "[INFO] Stopping Python processes..."
 sudo pkill -f python || echo "[INFO] No active Python processes found."
 
-echo "[INFO] Starting Flask application..."
-sudo $(which python3) app.py
+echo "[INFO] Starting Flask application inside tmux session..."
+tmux kill-session -t curtisconnect 2>/dev/null || true
+tmux new-session -d -s curtisconnect "cd $(pwd) && sudo $(which python3) app.py"
 
 echo "[INFO] Project reset successfully."

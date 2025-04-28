@@ -229,14 +229,14 @@ last_ssl_error_time = 0
 # User database
 USER_DB = "users.json"
 
-# Active clients
-# connected_clients = set()
-
 # Store the last message timestamp for each user
 user_last_message_time = {}
 
 # Active rooms
 rooms = {}
+
+# Active users
+connected_users = {}
 
 # Login page brute force prevention
 failed_login_attempts = {}
@@ -257,14 +257,15 @@ def upload_file():
         return jsonify({"success": False, "message": "No selected file"}), 400
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        aes_key = session_keys.get(session.get("username"))
+        room_id = request.form.get("roomId")
+        aes_key = room_aes_keys.get(room_id)
         if not aes_key:
             return jsonify({"success": False, "message": "AES key missing"}), 400
         try:
             file_data = file.read()
             encrypted_data_b64 = encrypt_message(file_data, aes_key)
             with open(os.path.join(app.config["UPLOAD_FOLDER"], filename), "wb") as f:
-                f.write(encrypted_data_b64.encode('utf-8'))  # Store encrypted file as Base64 string
+                f.write(encrypted_data_b64.encode('utf-8'))
             return jsonify({"success": True, "filename": filename})
         except Exception as e:
             print(f"[ERROR] File encryption failed: {e}")
@@ -273,9 +274,10 @@ def upload_file():
 @app.route("/download/<filename>")
 def download_file(filename):
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    aes_key = session_keys.get(session.get("username"))
+    room_id = request.form.get("roomId")
+    aes_key = room_aes_keys.get(room_id)
     if not aes_key:
-        return jsonify({"success": False, "message": "AES key missing"}), 400
+        return jsonify({"success": False, "message": "Room AES key missing"}), 400
     with open(file_path, "rb") as f:
         encrypted_data_b64 = f.read().decode('utf-8')
     decrypted_data = decrypt_message(encrypted_data_b64, aes_key)
@@ -288,9 +290,10 @@ def download_file(filename):
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    aes_key = session_keys.get(session.get("username"))
+    room_id = request.args.get("roomId")
+    aes_key = room_aes_keys.get(room_id)
     if not aes_key:
-        return jsonify({"success": False, "message": "AES key missing"}), 400
+        return jsonify({"success": False, "message": "Room AES key missing"}), 400
     try:
         with open(file_path, "rb") as f:
             encrypted_data_b64 = f.read().decode('utf-8')
@@ -558,11 +561,13 @@ def handle_connect():
 @socketio.on("authenticate")
 def handle_auth(data):
     username = data.get("username")
-    # print(f"[DEBUG] Auth attempt with username: {username}")
     if not username:
         print("No username provided, disconnecting.")
         disconnect()
         return
+    connected_users[request.sid] = username
+    print(f"[INFO] {username} authenticated and connected.")
+    socketio.emit("presence_update", list(connected_users.values()), broadcast=True)
 
 @socketio.on("join")
 def handle_join(data):
@@ -591,13 +596,15 @@ def handle_message(data):
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    if "username" in session:
-        username = session['username']
+    username = session.get('username', None)
+    if username:
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [USER DISCONNECTED] {username}")
         for roomId, data in rooms.items():
             if username in data["users"]:
                 data["users"].remove(username)
                 emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
+    connected_users.pop(request.sid, None)
+    socketio.emit("presence_update", list(connected_users.values()), broadcast=True)
 
 @socketio.on("leave")
 def handle_leave(data):
