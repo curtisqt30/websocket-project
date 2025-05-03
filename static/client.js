@@ -269,6 +269,18 @@ socket.on("error", (error) => {
 
 const maxRooms = 5;
 
+const allowedTypes = [
+    "image/jpeg",
+    "image/png",
+    "application/pdf",
+    "text/plain",
+];
+
+if (!allowedTypes.includes(file.type)) {
+    alert("Unsupported file type. Please upload a JPEG, PNG, PDF, or TXT file.");
+    return;
+}
+
 // DOM is fully loaded
 document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");
@@ -444,31 +456,38 @@ function appendMessage(user, msg, isSystemMessage = false) {
     messages.scrollTop = messages.scrollHeight;
 }
 
-function appendFileMessage(user, msgObject) {
+async function appendFileMessage(user, msgObject) {
     const messages = document.getElementById("messages");
     const messageElement = document.createElement("div");
     const timestamp = new Date().toLocaleTimeString();
-    const downloadUrl = `${msgObject.url}?roomId=${roomId}`;
-    let fileContent;
-    if (/\.(jpg|jpeg|png|gif)$/i.test(msgObject.filename)) {
-        fileContent = `<img src="${downloadUrl}"
-                          alt="${msgObject.filename}"
-                          style="max-width:300px; border:1px solid #ccc;">`;
-    } else if (/\.pdf$/i.test(msgObject.filename)) {
-        fileContent = `<a href="${downloadUrl}" target="_blank">
-                          📄 ${msgObject.filename}
-                       </a>`;
-    } else {
-        fileContent = `<a href="${downloadUrl}" target="_blank">
-                          ${msgObject.filename}
-                       </a>`;
+    try {
+        const response = await fetch(`/download/${msgObject.filename}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ roomId })
+        });
+        if (!response.ok) {
+            throw new Error("Failed to download file.");
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        let fileContent;
+        if (/\.(jpg|jpeg|png|gif)$/i.test(msgObject.filename)) {
+            fileContent = `<img src="${objectUrl}" alt="${msgObject.filename}" style="max-width:300px; border:1px solid #ccc;">`;
+        } else {
+            fileContent = `<a href="${objectUrl}" target="_blank">${msgObject.filename}</a>`;
+        }
+        messageElement.innerHTML = `<div>
+            <strong>[${timestamp}] ${user}:</strong>
+            <span>${fileContent}</span>
+        </div>`;
+        messages.appendChild(messageElement);
+        messages.scrollTop = messages.scrollHeight;
+    } catch (error) {
+        console.error("[ERROR] File display failed:", error);
+        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <em>Failed to load file</em></div>`;
+        messages.appendChild(messageElement);
     }
-    messageElement.innerHTML = `<div>
-        <strong>[${timestamp}] ${user}:</strong>
-        <span>${fileContent}</span>
-    </div>`;
-    messages.appendChild(messageElement);
-    messages.scrollTop = messages.scrollHeight;
 }
 
 // Function to add room to sidebar

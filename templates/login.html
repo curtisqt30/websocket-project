@@ -28,26 +28,6 @@
         </div>
     </div>
 
-    <script>
-        document.getElementById("loginForm").addEventListener("submit", function(event) {
-            event.preventDefault();
-
-            const formData = new FormData(this);
-
-            fetch("/login", {
-                method: "POST",
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    sessionStorage.setItem("username", formData.get("username")); 
-                    window.location.href = "/dashboard";
-                } else {
-                    alert(data.message);
-                }
-            });
-        });
-    </script>
+    <script src="/static/login.js" defer></script>
 </body>
 </html>

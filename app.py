@@ -271,10 +271,10 @@ def upload_file():
             print(f"[ERROR] File encryption failed: {e}")
             return jsonify({"success": False, "message": "File upload failed."})
 
-@app.route("/download/<filename>")
+@app.route("/download/<filename>", methods=["POST"])
 def download_file(filename):
     file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    room_id = request.form.get("roomId")
+    room_id = request.json.get("roomId")
     aes_key = room_aes_keys.get(room_id)
     if not aes_key:
         return jsonify({"success": False, "message": "Room AES key missing"}), 400
@@ -491,30 +491,30 @@ def join_room_route():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
-    # print("Current session content:", dict(session))
     ip = get_client_ip()
     if is_ip_blocked(ip):
-        return jsonify({
-            "success": False,
-            "message": "Too many failed attempts. Try again in 5 minutes."
-        })
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"success": False, "message": "Too many failed attempts. Try again in 5 minutes."})
+        return render_template("login.html", error="Too many failed attempts. Try again later.")
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            username = request.form.get("username")
+            password = request.form.get("password")
+            users = load_users()
+            if username in users and verify_password(password, users[username]):
+                session["username"] = username
+                if ip in failed_login_attempts:
+                    del failed_login_attempts[ip]
+                return jsonify({"success": True})
+            record_failed_attempt(ip)
+            return jsonify({"success": False, "message": "Invalid credentials"})
+        username = request.form.get("username")
+        password = request.form.get("password")
         users = load_users()
         if username in users and verify_password(password, users[username]):
             session["username"] = username
-            session.modified = True
-            ip = get_client_ip()
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] [LOGIN] {username} successfully logged in. (IP: {ip})")
-            # print(f"[DEBUG] Session after login: {session.get('username')}")
-            if ip in failed_login_attempts:
-                del failed_login_attempts[ip]
-            return jsonify({"success": True})
-        record_failed_attempt(ip)
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [FAILED LOGIN] IP: {ip} | Failed Attempt #{failed_login_attempts[ip][0]}")
-        return jsonify({"success": False, "message": "Invalid credentials"})
+            return redirect(url_for("dashboard_page"))
+        return render_template("login.html", error="Invalid credentials")
     return render_template("login.html")
 
 @app.route("/register", methods=["GET", "POST"])
@@ -683,8 +683,12 @@ def clear_keys_cache():
 def refresh_session():
     session.modified = True
 
+@app.route("/ping")
+def ping():
+    return jsonify({"status": "alive"}), 200
+
 # ----- Run Flask Server -----
 if __name__ == "__main__":
-    print("[SUCCESS] Starting server for WSS only...")
+    print("[INFO] Flask server started and accepting HTTPS traffic on port 5000...")
     http_server = SecureWSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler)
     http_server.serve_forever()
