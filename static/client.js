@@ -11,7 +11,7 @@ if (!username) {
 }
 
 // Initialize connection
-const socket = io("wss://curtisqt.com", {
+const socket = io("wss://curtisconnect.secure-tech.org", {
     path: "/socket.io/",
     transports: ["websocket"],
     timeout: 40000,            

@@ -38,4 +38,4 @@ echo "[INFO] Starting Flask application inside tmux session..."
 tmux kill-session -t curtisconnect 2>/dev/null || true
 tmux new-session -d -s curtisconnect "cd $(pwd) && sudo $(which python3) app.py"
 
-echo "[INFO] Project reset successfully."
+echo "[INFO] Project reset successfully. Use 'tmux attach -t curtisconnect' to view the Flask application logs."
