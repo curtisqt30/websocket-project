@@ -1,3 +1,5 @@
+from gevent import monkey
+monkey.patch_all()
 import ssl
 import json
 import os
@@ -30,7 +32,7 @@ app.config["SECRET_KEY"] = "secret-key"
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SECURE"] = False # Change to True in production
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 Session(app)
@@ -492,29 +494,43 @@ def join_room_route():
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     ip = get_client_ip()
+    print(f"[DEBUG] Login attempt from IP: {ip}")
     if is_ip_blocked(ip):
+        print(f"[DEBUG] IP {ip} is currently blocked.")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"success": False, "message": "Too many failed attempts. Try again in 5 minutes."})
         return render_template("login.html", error="Too many failed attempts. Try again later.")
     if request.method == "POST":
+        print("[DEBUG] Handling POST request")
+        # Check if it's an AJAX request
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            print("[DEBUG] AJAX login request detected")
             username = request.form.get("username")
             password = request.form.get("password")
+            print(f"[DEBUG] Received AJAX credentials - Username: {username}")
             users = load_users()
             if username in users and verify_password(password, users[username]):
+                print(f"[DEBUG] Successful login for {username}")
                 session["username"] = username
                 if ip in failed_login_attempts:
                     del failed_login_attempts[ip]
                 return jsonify({"success": True})
+            print(f"[DEBUG] Failed login for {username}")
             record_failed_attempt(ip)
             return jsonify({"success": False, "message": "Invalid credentials"})
+        # Fallback for non-AJAX login (e.g. form submission)
+        print("[DEBUG] Non-AJAX login path")
         username = request.form.get("username")
         password = request.form.get("password")
+        print(f"[DEBUG] Received form credentials - Username: {username}")
         users = load_users()
         if username in users and verify_password(password, users[username]):
+            print(f"[DEBUG] Successful login for {username} (form)")
             session["username"] = username
             return redirect(url_for("dashboard_page"))
+        print(f"[DEBUG] Failed login (form) for {username}")
         return render_template("login.html", error="Invalid credentials")
+    print("[DEBUG] GET request for login page")
     return render_template("login.html")
 
 @app.route("/register", methods=["GET", "POST"])
