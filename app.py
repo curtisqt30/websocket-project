@@ -249,28 +249,20 @@ MAX_FAILED_ATEMPTS = 3
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route("/upload", methods=["POST"])
+@app.route('/upload', methods=['POST'])
 def upload_file():
-    if "file" not in request.files:
-        return jsonify({"success": False, "message": "No file provided"}), 400
-    file = request.files["file"]
-    if file.filename == "":
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "No file part in request"}), 400
+    file = request.files['file']
+    room_id = request.form.get('roomId')
+    if file.filename == '':
         return jsonify({"success": False, "message": "No selected file"}), 400
-    if file and allowed_file(file.filename):
+    if file:
         filename = secure_filename(file.filename)
-        room_id = request.form.get("roomId")
-        aes_key = room_aes_keys.get(room_id)
-        if not aes_key:
-            return jsonify({"success": False, "message": "AES key missing"}), 400
-        try:
-            file_data = file.read()
-            encrypted_data_b64 = encrypt_message(file_data, aes_key)
-            with open(os.path.join(app.config["UPLOAD_FOLDER"], filename), "wb") as f:
-                f.write(encrypted_data_b64.encode('utf-8'))
-            return jsonify({"success": True, "filename": filename})
-        except Exception as e:
-            print(f"[ERROR] File encryption failed: {e}")
-            return jsonify({"success": False, "message": "File upload failed."})
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        return jsonify({"success": True, "filename": filename}), 200
+    return jsonify({"success": False, "message": "Something went wrong"}), 500
 
 @app.route("/download/<filename>", methods=["POST"])
 def download_file(filename):
@@ -642,12 +634,11 @@ def websocket_error_handler(e):
 @app.errorhandler(Exception)
 def handle_exception(e):
     logging.error(f"[ERROR] {str(e)}")
-    return "An err # Log the error without stack traceor occurred", 500
-
-#@app.before_request
-#def force_https():
-#    if request.url.startswith("http://"):
-#        return "This server only accepts HTTPS connections.", 403
+    # If the request is JSON (like from JS fetch or Axios), return JSON
+    if request.content_type and "application/json" in request.content_type:
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+    # Otherwise return plain text fallback
+    return make_response("An internal error occurred.", 500)
 
 # Custom Gevent WSGIServer
 class SecureWSGIServer(WSGIServer):
@@ -672,22 +663,6 @@ class SecureWSGIServer(WSGIServer):
                 print(f"[{timestamp}][SECURITY] SSL Error: {e}")
                 last_ssl_error_time = now
             client_socket.close()
-
-# def kick_dashboard_users():
-#     for sid in list(connected_clients):
-#         socketio.emit("force_disconnect", {"msg": "Server restarted. Please log in again."}, room=sid)
-#         socketio.server.disconnect(sid)
-#         connected_clients.remove(sid)
-
-# @app.before_request
-# def clear_stale_sessions():
-#     if not getattr(app, "_got_first_request", False):
-#         try:
-#             session.clear()
-#             app._got_first_request = True
-#             print("[INFO] Cleared stale sessions on server restart.")
-#         except Exception as e:
-#             print(f"[ERROR] Failed to clear sessions: {e}")
 
 @app.route("/clear_keys_cache", methods=["POST"])
 def clear_keys_cache():

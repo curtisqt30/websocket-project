@@ -276,6 +276,14 @@ const allowedTypes = [
     "text/plain",
 ];
 
+const maxChars = 150;
+
+function updateCharCount() {
+    const messageInput = document.getElementById("messageInput");
+    const charCount = document.getElementById("charCount");
+    const remaining = maxChars - [...messageInput.value].length;
+    charCount.textContent = `${remaining} characters remaining`;
+}
 // DOM is fully loaded
 document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");
@@ -321,17 +329,11 @@ document.addEventListener("DOMContentLoaded", function () {
     // Display username on the sidebar
     displayUsername(username);
 
-    const maxChars = 150;
-
     // Load existing rooms
     loadRooms();
 
     // Character count functionality
     messageInput.addEventListener("input", updateCharCount);
-    function updateCharCount() {
-        const remaining = maxChars - [...messageInput.value].length; 
-        charCount.textContent = `${remaining} characters remaining`;
-    }
 
     // Send message functionality
     sendButton.addEventListener("click", sendMessage);
