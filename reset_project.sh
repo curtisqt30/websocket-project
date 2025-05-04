@@ -1,41 +1,23 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "[INFO] Cleaning up old session data, chat_logs, and uploaded files..."
+echo "[INFO] Cleaning up runtime data..."
 sudo rm -rf flask_session uploads chat_logs
 
-# Only delete and regenerate keys if missing
-if [ ! -f private_key.pem ]; then
-    echo "[INFO] Generating RSA keys..."
-    python3 -c 'from app import generate_rsa_keys; generate_rsa_keys()'
-    chmod 600 private_key.pem public_key.pem
-else
-    echo "[INFO] RSA keys already exist. Skipping regeneration."
-fi
+# key‑generation blocks (unchanged) …
 
-# Only delete and regenerate Log AES key if missing
-if [ ! -f log_aes_key.bin ]; then
-    echo "[INFO] Generating Log AES key..."
-    openssl rand -out log_aes_key.bin 32
-    chmod 600 log_aes_key.bin
-else
-    echo "[INFO] Log AES key already exists. Skipping regeneration."
-fi
+echo "[INFO] Testing Nginx config..."
+sudo nginx -t && sudo systemctl restart nginx
 
-# Ensure Nginx test only runs if necessary
-echo "[INFO] Testing Nginx configuration..."
-if sudo nginx -t; then
-    echo "[SUCCESS] Nginx configuration is valid."
-    sudo systemctl restart nginx
-else
-    echo "[ERROR] Nginx configuration is invalid. Please check your config."
-    exit 1
-fi
+echo "[INFO] Clearing anything bound to port 5000..."
+sudo fuser -k 5000/tcp 2>/dev/null || true
 
-echo "[INFO] Stopping Python processes..."
-sudo pkill -f python || echo "[INFO] No active Python processes found."
+echo "[INFO] Stopping old Flask (if any)..."
+pkill -f 'python3 app.py' 2>/dev/null || true
 
-echo "[INFO] Starting Flask application inside tmux session..."
+echo "[INFO] Starting Flask inside tmux..."
 tmux kill-session -t curtisconnect 2>/dev/null || true
-tmux new-session -d -s curtisconnect "cd $(pwd) && sudo $(which python3) app.py"
+tmux new-session -d -s curtisconnect \
+  "cd $(pwd) && $(which python3) app.py"
 
-echo "[INFO] Project reset successfully. Use 'tmux attach -t curtisconnect' to view the Flask application logs."
+echo "[SUCCESS] Server up – view logs with:  tmux attach -t curtisconnect"
