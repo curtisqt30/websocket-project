@@ -276,11 +276,6 @@ const allowedTypes = [
     "text/plain",
 ];
 
-if (!allowedTypes.includes(file.type)) {
-    alert("Unsupported file type. Please upload a JPEG, PNG, PDF, or TXT file.");
-    return;
-}
-
 // DOM is fully loaded
 document.addEventListener("DOMContentLoaded", function () {
     const messageInput = document.getElementById("messageInput");

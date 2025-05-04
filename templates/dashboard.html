@@ -6,18 +6,15 @@
     <title>CurtisConnect</title>
 
     <!-- CSS -->
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='emoji-mart.css') }}">
+    
+    <!-- JS -->
+    <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='marked.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='emoji-mart.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='client.js') }}"></script>
 
-    <!-- Core Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
-
-    <!-- Utility Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/emoji-mart@latest/dist/browser.js"></script>
-
-    <!-- Client-side logic -->
-    <script src="/static/client.js"></script>
 </head>
 <body>
     <div class="app-container">
