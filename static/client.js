@@ -12,7 +12,7 @@ if (!username) {
 
 // Initialize connection
 const socket = io("wss://curtisconnect.secure-tech.org", {
-    path: "/socket.io/",
+    path: "/socket.io",
     transports: ["websocket"],
     timeout: 40000,            
     reconnectionAttempts: 20,  
@@ -384,7 +384,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     const fileMessage = JSON.stringify({
                         type: 'file',
                         filename: data.filename,
-                        url: `/uploads/${data.filename}`
+                        url: `/uploads/${data.filename}?roomId=${roomId}`
                     });
                     const encryptedFileMsg = await encryptMessage(fileMessage);
                     socket.emit("message", { user: username, msg: encryptedFileMsg, roomId });

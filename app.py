@@ -4,7 +4,7 @@ import json
 import os
 import time
 import hashlib
-from flask import Flask, make_response, render_template, redirect, url_for, request, session, jsonify, send_from_directory
+from flask import Flask, make_response, render_template, redirect, url_for, request, session, jsonify, send_from_directory, abort
 from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_session import Session
 from gevent.pywsgi import WSGIServer
@@ -12,7 +12,7 @@ from geventwebsocket.handler import WebSocketHandler
 from threading import Thread
 import random
 import string
-import logging
+import logging, sys
 import socket
 import bcrypt
 from datetime import datetime
@@ -31,9 +31,21 @@ app.config["SECRET_KEY"] = "secret-key"
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_COOKIE_SECURE"] = False # Change to True in production
+app.config["SESSION_COOKIE_SECURE"] = True # Change to True in production
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
+
+for h in list(app.logger.handlers):
+    app.logger.removeHandler(h)
+logging.getLogger('gevent.ssl').setLevel(logging.CRITICAL)
+logging.getLogger('engineio').setLevel(logging.ERROR)
+logging.getLogger('socketio').setLevel(logging.ERROR)
+logging.getLogger("werkzeug").disabled = True
+
+@app.errorhandler(404)
+def silent_404(e):
+    return "", 404
+
 Session(app)
 
 # RSA Keys
@@ -100,8 +112,6 @@ def get_rsa_fingerprint(key):
     return hashlib.sha256(
         key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
     ).hexdigest()
-
-# print(f"[DEBUG] RSA Public Key Fingerprint: {get_rsa_fingerprint(rsa_public_key)}")
 
 # AES-256 Encryption
 session_keys = {}
@@ -210,12 +220,14 @@ if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
 # Initialize WebSocket with Flask-SocketIO
-socketio = SocketIO(app, 
-                    cors_allowed_origins="*", 
-                    path="/socket.io/", 
-                    async_mode="gevent",
-                    ping_timeout=20,
-                    ping_interval=5 
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="gevent",
+    path="/socket.io",       
+    transports=["websocket"],
+    ping_timeout=20,
+    ping_interval=5,
 )
 
 # SSL Setup
@@ -260,7 +272,10 @@ def upload_file():
     if file:
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(filepath)
+        file_data = file.read()
+        encrypted_data = encrypt_message(file_data, room_aes_keys.get(room_id))
+        with open(filepath, "w") as f:
+            f.write(encrypted_data)
         return jsonify({"success": True, "filename": filename}), 200
     return jsonify({"success": False, "message": "Something went wrong"}), 500
 
@@ -273,9 +288,9 @@ def download_file(filename):
         return jsonify({"success": False, "message": "Room AES key missing"}), 400
     with open(file_path, "rb") as f:
         encrypted_data_b64 = f.read().decode('utf-8')
-    decrypted_data = decrypt_message(encrypted_data_b64, aes_key)
-    response = make_response(base64.b64decode(decrypted_data))
+    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)  # <- Fix here
     mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
+    response = make_response(decrypted_data)
     response.headers['Content-Type'] = mime_type
     response.headers['Content-Disposition'] = f'attachment; filename={filename}'
     return response
@@ -413,12 +428,25 @@ def home():
 @app.route("/dashboard")
 def dashboard_page():
     if not session.get("username"):
-        # print("[DEBUG] Session missing username, redirecting...")
         return redirect(url_for("login_page"))
     room_code = request.args.get("roomId", "").strip().upper()
     if not room_code:
         return render_template("dashboard.html", roomId="None")
     return render_template("dashboard.html", roomId=room_code)
+
+@app.route("/<code>")
+def room_shortcut(code):
+    if len(code) == 4 and code.isalnum():
+        return redirect(url_for("dashboard_page", roomId=code.upper()))
+    abort(404)
+
+@app.route("/<code>/")
+def room_shortcut_slash(code):
+    if len(code) == 4 and code.isalnum():
+        return redirect(url_for("dashboard_page", roomId=code.upper()), code=302)
+    abort(404)
+
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 @app.route("/get_public_key", methods=["GET"])
 def get_public_key():
@@ -485,32 +513,32 @@ def join_room_route():
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     ip = get_client_ip()
-    print(f"[DEBUG] Login attempt from IP: {ip}")
+    print(f"[INFO] Login attempt from IP: {ip}")
     if is_ip_blocked(ip):
-        print(f"[DEBUG] IP {ip} is currently blocked.")
+        # print(f"[DEBUG] IP {ip} is currently blocked.")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"success": False, "message": "Too many failed attempts. Try again in 5 minutes."})
         return render_template("login.html", error="Too many failed attempts. Try again later.")
     if request.method == "POST":
-        print("[DEBUG] Handling POST request")
+        # print("[DEBUG] Handling POST request")
         # Check if it's an AJAX request
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            print("[DEBUG] AJAX login request detected")
+            # print("[DEBUG] AJAX login request detected")
             username = request.form.get("username")
             password = request.form.get("password")
-            print(f"[DEBUG] Received AJAX credentials - Username: {username}")
+            # print(f"[DEBUG] Received AJAX credentials - Username: {username}")
             users = load_users()
             if username in users and verify_password(password, users[username]):
-                print(f"[DEBUG] Successful login for {username}")
+                print(f"[INFO] Successful login for {username}, {ip}")
                 session["username"] = username
                 if ip in failed_login_attempts:
                     del failed_login_attempts[ip]
                 return jsonify({"success": True})
-            print(f"[DEBUG] Failed login for {username}")
+            print(f"[INFO] Failed login for {username}")
             record_failed_attempt(ip)
             return jsonify({"success": False, "message": "Invalid credentials"})
-        # Fallback for non-AJAX login (e.g. form submission)
-        print("[DEBUG] Non-AJAX login path")
+        # Fallback for non-AJAX login
+        # print("[DEBUG] Non-AJAX login path")
         username = request.form.get("username")
         password = request.form.get("password")
         print(f"[DEBUG] Received form credentials - Username: {username}")
@@ -521,7 +549,7 @@ def login_page():
             return redirect(url_for("dashboard_page"))
         print(f"[DEBUG] Failed login (form) for {username}")
         return render_template("login.html", error="Invalid credentials")
-    print("[DEBUG] GET request for login page")
+    # print("[DEBUG] GET request for login page")
     return render_template("login.html")
 
 @app.route("/register", methods=["GET", "POST"])

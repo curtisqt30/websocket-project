@@ -228,3 +228,8 @@ p {
 .leave-btn:hover {
     background-color: #E5533D;
 }
+
+#messages img {
+    vertical-align: top; 
+    display: inline-block;
+}
