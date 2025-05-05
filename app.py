@@ -31,7 +31,7 @@ app.config["SECRET_KEY"] = "secret-key"
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_COOKIE_SECURE"] = True # Change to True in production
+app.config["SESSION_COOKIE_SECURE"] = True # Change to True in production / false otherwise
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 
@@ -53,9 +53,7 @@ def load_rsa_keys():
     try:
         with open("private_key.pem", "rb") as f:
             key_data = f.read()
-            # print(f"[DEBUG] Raw Private Key Data (Length: {len(key_data)})")
         if b"-----BEGIN PRIVATE KEY-----" not in key_data:
-            # print("[ERROR] Malformed Private Key. Detected old PKCS#1 format or corrupted data.")
             raise ValueError("Invalid Key Format")
         private_key = serialization.load_pem_private_key(key_data, password=None)
         with open("public_key.pem", "rb") as f:
@@ -123,7 +121,6 @@ def generate_aes_key():
         return jsonify({"success": False, "message": "User not authenticated."})
     aes_key = os.urandom(32)
     session_keys[username] = aes_key
-    # print(f"[DEBUG] Raw AES Key (32 bytes): {aes_key.hex()}")
     try:
         encrypted_aes_key = rsa_public_key.encrypt(
             aes_key,
@@ -139,10 +136,8 @@ def generate_aes_key():
             label=None
         ))
         if decrypted_aes_key != aes_key:
-            # print("[ERROR] AES Key Mismatch! Corruption detected before transmission.")
             return jsonify({"success": False, "message": "AES Key verification failed."})
         encrypted_key_b64 = base64.b64encode(encrypted_aes_key).decode()
-        # print(f"[DEBUG] Encrypted AES Key (Length: {len(encrypted_key_b64)}): {encrypted_key_b64}")
 
         return jsonify({
             "success": True,
@@ -180,14 +175,10 @@ def get_private_key():
     try:
         with open("private_key.pem", "r") as f:
             private_key = f.read().strip()
-        # print(f"[DEBUG] Private Key Content (Length: {len(private_key)})")
-        # print(private_key)
         private_key = "\n".join(line.strip() for line in private_key.strip().splitlines())
         if not private_key.startswith("-----BEGIN PRIVATE KEY-----") or \
            not private_key.endswith("-----END PRIVATE KEY-----"):
-            # print("[ERROR] Private key format invalid or incomplete.")
             return jsonify({"success": False, "message": "Private key invalid."})
-        # print("[DEBUG] Private Key Retrieved Successfully.")
         return jsonify({"success": True, "private_key": private_key})
     except Exception as e:
         print(f"[ERROR] Failed to retrieve private key: {e}")
@@ -213,7 +204,6 @@ logging.getLogger("gevent.ssl").setLevel(logging.ERROR)
 logging.getLogger("engineio.server").setLevel(logging.CRITICAL)
 logging.getLogger("socketio").setLevel(logging.DEBUG)
 logging.getLogger("engineio").setLevel(logging.DEBUG)
-
 
 LOGS_FOLDER = "chat_logs"
 if not os.path.exists(LOGS_FOLDER):
@@ -409,7 +399,6 @@ def monitor_inactivity():
                     remove_room(roomId)
         time.sleep(5)
 
-
 Thread(target=monitor_inactivity, daemon=True).start()
 user_last_message_time = {}
 
@@ -487,7 +476,6 @@ def get_room_aes_key(room_id):
         print(f"[ERROR] Failed to encrypt AES key: {e}")
         return jsonify({"success": False, "message": "AES key encryption failed."}), 500
 
-
 @app.route("/create-room", methods=["POST"])
 def create_room():
     if "username" not in session:
@@ -513,20 +501,15 @@ def join_room_route():
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     ip = get_client_ip()
-    print(f"[INFO] Login attempt from IP: {ip}")
+    print(f"[INFO] Login page visit from IP: {ip}")
     if is_ip_blocked(ip):
-        # print(f"[DEBUG] IP {ip} is currently blocked.")
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"success": False, "message": "Too many failed attempts. Try again in 5 minutes."})
         return render_template("login.html", error="Too many failed attempts. Try again later.")
     if request.method == "POST":
-        # print("[DEBUG] Handling POST request")
-        # Check if it's an AJAX request
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            # print("[DEBUG] AJAX login request detected")
             username = request.form.get("username")
             password = request.form.get("password")
-            # print(f"[DEBUG] Received AJAX credentials - Username: {username}")
             users = load_users()
             if username in users and verify_password(password, users[username]):
                 print(f"[INFO] Successful login for {username}, {ip}")
@@ -534,22 +517,20 @@ def login_page():
                 if ip in failed_login_attempts:
                     del failed_login_attempts[ip]
                 return jsonify({"success": True})
-            print(f"[INFO] Failed login for {username}")
+            print(f"[INFO] Failed login for {username}, {ip}")
             record_failed_attempt(ip)
             return jsonify({"success": False, "message": "Invalid credentials"})
         # Fallback for non-AJAX login
-        # print("[DEBUG] Non-AJAX login path")
         username = request.form.get("username")
         password = request.form.get("password")
-        print(f"[DEBUG] Received form credentials - Username: {username}")
+        print(f"[INFO] Received form credentials - Username: {username}, {ip}")
         users = load_users()
         if username in users and verify_password(password, users[username]):
-            print(f"[DEBUG] Successful login for {username} (form)")
+            print(f"[INFO] Successful login for {username} (form), {ip}")
             session["username"] = username
             return redirect(url_for("dashboard_page"))
-        print(f"[DEBUG] Failed login (form) for {username}")
+        print(f"[INFO] Failed login (form) for {username}, {ip}")
         return render_template("login.html", error="Invalid credentials")
-    # print("[DEBUG] GET request for login page")
     return render_template("login.html")
 
 @app.route("/register", methods=["GET", "POST"])
@@ -569,7 +550,6 @@ def register():
         return redirect(url_for("login_page"))
     return render_template("register.html")
 
-
 @app.route("/logout")
 def logout():
     username = session['username']
@@ -585,13 +565,8 @@ def favicon():
 def handle_connect():
     print(f"[INFO] New Connection SID: {request.sid}")
     ip = get_client_ip()
-    # print(f"[DEBUG] Connection Attempt Received from {ip}")
     if "username" not in session:
-        # print(f"[DEBUG] Session missing username - rejecting connection")
         disconnect()
-    # else:
-    #     # print(f"[DEBUG] Connection Successful for {session['username']}")
-    #     connected_clients.add(request.sid)
 
 @socketio.on("authenticate")
 def handle_auth(data):
@@ -612,7 +587,6 @@ def handle_join(data):
     if roomId in rooms:
         join_room(roomId)
         rooms[roomId]["users"].append(username)
-        # print(f"[DEBUG] Room Data After Join: {rooms}")
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
     else:
         print(f"[ERROR] Room {roomId} doesn't exist or was deleted.")
@@ -662,10 +636,8 @@ def websocket_error_handler(e):
 @app.errorhandler(Exception)
 def handle_exception(e):
     logging.error(f"[ERROR] {str(e)}")
-    # If the request is JSON (like from JS fetch or Axios), return JSON
     if request.content_type and "application/json" in request.content_type:
         return jsonify({"success": False, "message": "Internal server error"}), 500
-    # Otherwise return plain text fallback
     return make_response("An internal error occurred.", 500)
 
 # Custom Gevent WSGIServer
