@@ -39,23 +39,30 @@
         <div class="main-content">
             <div class="chat-header"></div>
 
-            <div id="messages">
-                <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
-                    You're currently not in a chatroom. Create or join a room using the sidebar.
-                </p>
-            </div>
-
-            <div class="message-input">
-                <div class="top-actions">
-                    <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
-                    <button id="emojiButton">😊 Emoji</button>
-                    <button id="uploadButton">📁 File Upload</button>
+            <div class="chat-pane">
+                <div id="messages">
+                    <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
+                        You're currently not in a chatroom. Create or join a room using the sidebar.
+                    </p>
                 </div>
-                <button id="sendButton">Send</button>
-                <div id="emoji-picker-container" style="display:none;"></div>
-            </div>
 
-            <p id="charCount">150 characters remaining</p>
+                <div class="message-input">
+                    <div class="top-actions">
+                        <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
+                        <button id="emojiButton">😊 Emoji</button>
+                        <button id="uploadButton">📁 File Upload</button>
+                    </div>
+                    <button id="sendButton">Send</button>
+                    <div id="emoji-picker-container" style="display:none;"></div>
+                </div>
+
+                <p id="charCount">150 characters remaining</p>
+            </div>
+            
+            <div id="roomRoster">
+                <h3>In room</h3>
+                <div id="rosterList"></div>
+            </div>
         </div>
     </div>
 </body>

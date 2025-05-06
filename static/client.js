@@ -43,6 +43,17 @@ socket.on("connect", () => {
 
 socket.on("rate_limit", (data) => alert(data.msg));
 
+socket.on("roster_update", ({roomId: rid, users}) => {
+    if (rid !== roomId) return;
+    const list = document.getElementById("rosterList");
+    list.innerHTML = users.map(u => `
+        <div class="roster-row">
+            <span class="dot"></span>
+            <span>${u === username ? u + " (you)" : u}</span>
+        </div>
+    `).join("");
+});
+
 socket.on("force_disconnect", (data) => {
     alert(data.msg);
     socket.disconnect();
@@ -55,9 +66,28 @@ socket.on("room_invalid", (data) => {
     window.location.href = "/dashboard";
 });
 
-socket.on("presence_update", (onlineUsers) => {
-    console.log("[DEBUG] Online users list received:", onlineUsers);
-    updateOnlineUsersList(onlineUsers);
+socket.on("presence_update", stateList => {
+    const div = document.getElementById("onlineUsersList") || 
+                document.createElement("div");
+    div.id = "onlineUsersList";
+    document.querySelector(".sidebar").appendChild(div);
+    div.innerHTML = "<h3>Users:</h3>" +
+      stateList.map(u => `<p>${u.user} <span style="color:gray">(${u.state})</span></p>`).join("");
+});
+
+// receive updates
+socket.on("typing", data => {
+    const {user, typing} = data;
+    const notice = document.getElementById("typingNotice") ||
+                   document.createElement("div");
+    notice.id = "typingNotice";
+    notice.style.fontStyle = "italic";
+    if (typing) {
+        notice.textContent = `${user} is typing…`;
+        document.querySelector(".main-content").appendChild(notice);
+    } else {
+        notice.remove();
+    }
 });
 
 fetch("/get_private_key", { method: "POST" })
@@ -358,6 +388,13 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!emojiPickerContainer.contains(e.target) && !emojiButton.contains(e.target)) {
             emojiPickerContainer.style.display = 'none';
         }
+    });
+    let typingTimer;
+    messageInput.addEventListener("input", () => {
+        socket.emit("typing", {roomId, user: username, typing:true});
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(() =>
+            socket.emit("typing", {roomId, user: username, typing:false}), 1500);
     });
 
     // Upload file functionality

@@ -48,6 +48,9 @@ def silent_404(e):
 
 Session(app)
 
+# User Status  
+user_status = {}
+
 # RSA Keys
 def load_rsa_keys():
     try:
@@ -244,88 +247,32 @@ connected_users = {}
 # Login page brute force prevention
 failed_login_attempts = {}
 
-IP_BLOCK_DURATION = 300
-MAX_FAILED_ATEMPTS = 3
-
 # --------------------------- Functions ----------------
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    if 'file' not in request.files:
-        return jsonify({"success": False, "message": "No file part in request"}), 400
-    file = request.files['file']
-    room_id = request.form.get('roomId')
-    if file.filename == '':
-        return jsonify({"success": False, "message": "No selected file"}), 400
-    if file:
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file_data = file.read()
-        encrypted_data = encrypt_message(file_data, room_aes_keys.get(room_id))
-        with open(filepath, "w") as f:
-            f.write(encrypted_data)
-        return jsonify({"success": True, "filename": filename}), 200
-    return jsonify({"success": False, "message": "Something went wrong"}), 500
+def broadcast_presence():
+    socketio.emit("presence_update", list(user_status.values()), broadcast=True)
 
-@app.route("/download/<filename>", methods=["POST"])
-def download_file(filename):
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    room_id = request.json.get("roomId")
-    aes_key = room_aes_keys.get(room_id)
-    if not aes_key:
-        return jsonify({"success": False, "message": "Room AES key missing"}), 400
-    with open(file_path, "rb") as f:
-        encrypted_data_b64 = f.read().decode('utf-8')
-    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)  # <- Fix here
-    mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
-    response = make_response(decrypted_data)
-    response.headers['Content-Type'] = mime_type
-    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
-    return response
-
-@app.route("/uploads/<filename>")
-def uploaded_file(filename):
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-    room_id = request.args.get("roomId")
-    aes_key = room_aes_keys.get(room_id)
-    if not aes_key:
-        return jsonify({"success": False, "message": "Room AES key missing"}), 400
-    try:
-        with open(file_path, "rb") as f:
-            encrypted_data_b64 = f.read().decode('utf-8')
-        decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)
-        file_ext = filename.rsplit('.', 1)[1].lower()
-        mime_type = {
-            "jpg": "image/jpeg",
-            "jpeg": "image/jpeg",
-            "png": "image/png",
-            "gif": "image/gif",
-            "pdf": "application/pdf"
-        }.get(file_ext, "application/octet-stream")
-        response = make_response(decrypted_data)
-        response.headers.set('Content-Type', mime_type)
-        response.headers.set('Content-Disposition', 'inline', filename=filename)
-        return response
-    except Exception as e:
-        print(f"[ERROR] File serving failed: {e}")
-        return jsonify({"success": False, "message": "Failed to serve file."}), 500
+IP_BLOCK_DURATION = 300
+MAX_FAILED_ATTEMPTS = 3
 
 def is_ip_blocked(ip):
     if ip in failed_login_attempts:
         attempts, block_start = failed_login_attempts[ip]
-        if attempts >= MAX_FAILED_ATEMPTS:
-            if time.time() - block_start < IP_BLOCK_DURATION:
-                remaining_time = int(IP_BLOCK_DURATION - (time.time() - block_start))
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-                      f"[SECURITY] IP '{ip}' is blocked for {remaining_time} seconds due to {attempts} failed attempts.")
-                return True
-            else:
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-                      f"[INFO] IP '{ip}' block expired. Removing from blocked list.")
-                del failed_login_attempts[ip]
+        if attempts >= MAX_FAILED_ATTEMPTS and time.time() - block_start < IP_BLOCK_DURATION:
+            abort(429)          
+        elif attempts >= MAX_FAILED_ATTEMPTS:
+            del failed_login_attempts[ip] 
     return False
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify(success=False,
+                       message="Too many failed attempts – wait 5 min"), 429
+    return render_template("login.html",
+                           error="Too many failed attempts. Please wait 5 min"), 429
 
 def record_failed_attempt(ip):
     if ip in failed_login_attempts:
@@ -446,6 +393,68 @@ def get_public_key():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "No file part in request"}), 400
+    file = request.files['file']
+    room_id = request.form.get('roomId')
+    if file.filename == '':
+        return jsonify({"success": False, "message": "No selected file"}), 400
+    if file:
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file_data = file.read()
+        encrypted_data = encrypt_message(file_data, room_aes_keys.get(room_id))
+        with open(filepath, "w") as f:
+            f.write(encrypted_data)
+        return jsonify({"success": True, "filename": filename}), 200
+    return jsonify({"success": False, "message": "Something went wrong"}), 500
+
+@app.route("/download/<filename>", methods=["POST"])
+def download_file(filename):
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    room_id = request.json.get("roomId")
+    aes_key = room_aes_keys.get(room_id)
+    if not aes_key:
+        return jsonify({"success": False, "message": "Room AES key missing"}), 400
+    with open(file_path, "rb") as f:
+        encrypted_data_b64 = f.read().decode('utf-8')
+    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)  # <- Fix here
+    mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
+    response = make_response(decrypted_data)
+    response.headers['Content-Type'] = mime_type
+    response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+    return response
+
+@app.route("/uploads/<filename>")
+def uploaded_file(filename):
+    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    room_id = request.args.get("roomId")
+    aes_key = room_aes_keys.get(room_id)
+    if not aes_key:
+        return jsonify({"success": False, "message": "Room AES key missing"}), 400
+    try:
+        with open(file_path, "rb") as f:
+            encrypted_data_b64 = f.read().decode('utf-8')
+        decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)
+        file_ext = filename.rsplit('.', 1)[1].lower()
+        mime_type = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "gif": "image/gif",
+            "pdf": "application/pdf"
+        }.get(file_ext, "application/octet-stream")
+        response = make_response(decrypted_data)
+        response.headers.set('Content-Type', mime_type)
+        response.headers.set('Content-Disposition', 'inline', filename=filename)
+        return response
+    except Exception as e:
+        print(f"[ERROR] File serving failed: {e}")
+        return jsonify({"success": False, "message": "Failed to serve file."}), 500
+
 # Generate AES key per room
 room_aes_keys = {}
 
@@ -506,6 +515,9 @@ def login_page():
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return jsonify({"success": False, "message": "Too many failed attempts. Try again in 5 minutes."})
         return render_template("login.html", error="Too many failed attempts. Try again later.")
+    if request.method == "GET":
+        new = request.args.get("new") == "1"
+        return render_template("login.html", new=new)
     if request.method == "POST":
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             username = request.form.get("username")
@@ -571,25 +583,25 @@ def handle_connect():
 @socketio.on("authenticate")
 def handle_auth(data):
     username = data.get("username")
-    if not username:
-        print("No username provided, disconnecting.")
-        disconnect()
-        return
-    connected_users[request.sid] = username
-    print(f"[INFO] {username} authenticated and connected.")
-    socketio.emit("presence_update", list(connected_users.values()), broadcast=True)
+    user_status[request.sid] = {"user": username, "state": "online"}
+    broadcast_presence()
+
+def broadcast_room_roster(roomId):
+    """Send list of users currently in roomId only to that room."""
+    names = rooms[roomId]["users"]
+    socketio.emit("roster_update", {"roomId": roomId, "users": names}, room=roomId)
 
 @socketio.on("join")
 def handle_join(data):
     roomId = data.get("roomId", "").strip().upper()
     username = session.get("username", "Guest")
-
     if roomId in rooms:
         join_room(roomId)
-        rooms[roomId]["users"].append(username)
+        if username not in rooms[roomId]["users"]:
+            rooms[roomId]["users"].append(username)
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
+        broadcast_room_roster(roomId)
     else:
-        print(f"[ERROR] Room {roomId} doesn't exist or was deleted.")
         emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
 
 @socketio.on("message")
@@ -605,33 +617,27 @@ def handle_message(data):
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    username = session.get('username', None)
-    if username:
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [USER DISCONNECTED] {username}")
-        for roomId, data in rooms.items():
-            if username in data["users"]:
-                data["users"].remove(username)
-                emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
-    connected_users.pop(request.sid, None)
-    socketio.emit("presence_update", list(connected_users.values()), broadcast=True)
+    user_status.pop(request.sid, None)
+    broadcast_presence()
 
 @socketio.on("leave")
 def handle_leave(data):
     username = data.get("user", "Guest")
-    roomId = data.get("roomId", "").strip().upper()
+    roomId   = data.get("roomId", "").strip().upper()
     if roomId in rooms and username in rooms[roomId]["users"]:
         rooms[roomId]["users"].remove(username)
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [ROOM={roomId}] {username} left the chat.")
-        emit("user_left", {"msg": f"{username} has left the chat"}, room=roomId)
-    else:
-        print(f"[ERROR] Room {roomId} doesn't exist or user {username} not in room.")
-        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists. Redirecting you to the dashboard."}, room=request.sid)
-    disconnect()
+        emit("user_left", {"msg": f"{username} left"}, room=roomId)
+        broadcast_room_roster(roomId)     
 
 @socketio.on_error_default
 def websocket_error_handler(e):
     if isinstance(e, ssl.SSLError) and "HTTP_REQUEST" in str(e):
         return 
+
+@socketio.on("heartbeat")
+def heartbeat(data):
+    if request.sid in user_status:
+        user_status[request.sid]["last"] = time.time()
 
 @app.errorhandler(Exception)
 def handle_exception(e):
