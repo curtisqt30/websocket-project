@@ -16,7 +16,8 @@ import string
 import logging, sys
 import socket
 import bcrypt
-from datetime import datetime
+import datetime
+from datetime import datetime as dt_cls
 from cryptography.fernet import Fernet
 from werkzeug.utils import secure_filename
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
@@ -26,7 +27,6 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 import requests
-import datetime
 
 # Flask App Config
 app = Flask(__name__)
@@ -63,19 +63,19 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=dt_cls.utcnow)
 
 class Room(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     room_code = db.Column(db.String(4), unique=True, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=dt_cls.utcnow)
 
 class Message(db.Model):
     id = db.Column(db.BigInteger, primary_key=True)
     room_id = db.Column(db.Integer, db.ForeignKey('room.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     text = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=dt_cls.utcnow)
 
 # User Status  
 user_status = {}

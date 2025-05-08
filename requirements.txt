@@ -1,8 +1,12 @@
 Flask
 Flask-SocketIO
 Flask-Session
-gevent
-gevent-websocket
 Flask-Limiter
 Flask-SQLAlchemy
 PyMySQL
+gevent
+gevent-websocket
+bcrypt
+cryptography
+requests
+Werkzeug
