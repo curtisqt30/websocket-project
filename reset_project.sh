@@ -4,8 +4,6 @@ set -euo pipefail
 echo "[INFO] Cleaning up runtime data..."
 sudo rm -rf flask_session uploads chat_logs
 
-# key‑generation blocks (unchanged) …
-
 echo "[INFO] Testing Nginx config..."
 sudo nginx -t && sudo systemctl restart nginx
 
@@ -20,4 +18,4 @@ tmux kill-session -t curtisconnect 2>/dev/null || true
 tmux new-session -d -s curtisconnect \
   "cd $(pwd) && $(which python3) app.py"
 
-echo "[SUCCESS] Server up – view logs with:  tmux attach -t curtisconnect"
+echo "[SUCCESS] Server up view logs with:  tmux attach -t curtisconnect"

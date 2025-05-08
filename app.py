@@ -5,6 +5,7 @@ import os
 import time
 import hashlib
 from flask import Flask, make_response, render_template, redirect, url_for, request, session, jsonify, send_from_directory, abort
+from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_session import Session
 from gevent.pywsgi import WSGIServer
@@ -25,14 +26,15 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 import requests
+import datetime
 
-# Flask setup
+# Flask App Config
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "secret-key"
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_COOKIE_SECURE"] = True # Change to True in production / false otherwise
+app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 
@@ -47,12 +49,38 @@ logging.getLogger("werkzeug").disabled = True
 def silent_404(e):
     return "", 404
 
+# Database Config
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://db_user:db_pass@db_host/securechat'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Init
+db = SQLAlchemy(app)
 Session(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", path="/socket.io", transports=["websocket"], ping_timeout=20, ping_interval=5,)
+
+# Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password_hash = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Room(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    room_code = db.Column(db.String(4), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Message(db.Model):
+    id = db.Column(db.BigInteger, primary_key=True)
+    room_id = db.Column(db.Integer, db.ForeignKey('room.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # User Status  
 user_status = {}
 
-# RSA Keys
+# Keys Management
 def load_rsa_keys():
     try:
         with open("private_key.pem", "rb") as f:
@@ -92,14 +120,12 @@ def generate_rsa_keys():
     except Exception as e:
         print(f"[ERROR] Failed to generate RSA keys: {e}")
 
-# RSA keys loading
 try:
     private_key, rsa_public_key = load_rsa_keys()
 except FileNotFoundError:
     print("[WARNING] RSA keys not found. Please run ./reset_project.sh to generate them.")
     exit(1)
 
- # AES key specifically for logging messages
 log_aes_key_file = 'log_aes_key.bin'
 
 if not os.path.exists(log_aes_key_file):
@@ -109,13 +135,12 @@ if not os.path.exists(log_aes_key_file):
 with open(log_aes_key_file, 'rb') as f:
     log_aes_key = f.read()
 
-# RSA Key Logging
 def get_rsa_fingerprint(key):
     return hashlib.sha256(
         key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
     ).hexdigest()
 
-# AES-256 Encryption
+# Encryption/Decryption
 session_keys = {}
 
 @app.route("/generate_aes_key", methods=["POST"])
@@ -188,19 +213,16 @@ def get_private_key():
         print(f"[ERROR] Failed to retrieve private key: {e}")
         return jsonify({"success": False, "message": "Failed to retrieve private key."})
 
-# Uploading files
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024  # 8 MB file size limit
-
-@app.errorhandler(413)
-def request_entity_too_large(error):
-    return jsonify({"success": False, "message": "File size exceeds 8MB limit."}), 413
-
+# File Uploads/Download Configurations
 UPLOAD_FOLDER = "uploads"
 ALLOWED_EXTENSIONS = {"txt", "pdf", "png", "jpg", "jpeg", "gif"}
-
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({"success": False, "message": "File size exceeds 8MB limit."}), 413
 
 # logging w/ filtering
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -213,16 +235,7 @@ LOGS_FOLDER = "chat_logs"
 if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
-# Initialize WebSocket with Flask-SocketIO
-socketio = SocketIO(
-    app,
-    cors_allowed_origins="*",
-    async_mode="gevent",
-    path="/socket.io",       
-    transports=["websocket"],
-    ping_timeout=20,
-    ping_interval=5,
-)
+
 
 # SSL Setup
 ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -322,7 +335,7 @@ def log_message(roomId, username, msg):
         file.write(encrypted_entry + "\n")
 
 def generate_room():
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
 
 def load_users():
     if os.path.exists(USER_DB):
@@ -342,8 +355,7 @@ def save_users(users):
 
 def hash_password(password):
     salt = bcrypt.gensalt()
-    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8')
+    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
 def verify_password(password, hashed):
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
