@@ -722,8 +722,5 @@ def ping():
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
-    # Use gevent WSGI+WebSocket server for production
-    http_server = SecureWSGIServer(("0.0.0.0", 5000), app,
-                                  handler_class=WebSocketHandler)
-    print("[INFO] Server listening on port 5000")
-    http_server.serve_forever()
+    port = int(os.environ.get("PORT", 5000))
+    socketio.run(app, host="0.0.0.0", port=port)
