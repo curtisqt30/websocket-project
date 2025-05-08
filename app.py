@@ -24,6 +24,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
+import requests
 
 # Flask setup
 app = Flask(__name__)
@@ -248,6 +249,23 @@ connected_users = {}
 failed_login_attempts = {}
 
 # --------------------------- Functions ----------------
+def verify_captcha(token, remote_ip=None):
+    payload = {
+        "secret":  os.environ["RECAPTCHA_SECRET"],
+        "response": token,
+    }
+    if remote_ip:
+        payload["remoteip"] = remote_ip
+    try:
+        r = requests.post("https://www.google.com/recaptcha/api/siteverify",
+                          data=payload, timeout=3)
+        r.raise_for_status()
+        data = r.json()
+        return data.get("success", False)
+    except Exception as e:
+        app.logger.warning("reCAPTCHA verification error: %s", e)
+        return False
+
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -421,7 +439,7 @@ def download_file(filename):
         return jsonify({"success": False, "message": "Room AES key missing"}), 400
     with open(file_path, "rb") as f:
         encrypted_data_b64 = f.read().decode('utf-8')
-    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)  # <- Fix here
+    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True) 
     mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
     response = make_response(decrypted_data)
     response.headers['Content-Type'] = mime_type
@@ -547,20 +565,24 @@ def login_page():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
+    site_key = os.environ["RECAPTCHA_SITE"]
     if request.method == "POST":
-        username = request.form["username"]
+        token = request.form.get("g-recaptcha-response")
+        if not verify_captcha(token, get_client_ip()):
+            return render_template("register.html",
+                                   site_key=site_key,
+                                   error="Captcha failed — please try again.")
+        username = request.form["username"].strip()
         password = request.form["password"]
         users = load_users()
         if username in users:
-            print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-                  f"[INFO] Registration failed: Username '{username}' is already taken.")
-            return render_template("register.html", error="Username already taken")
+            return render_template("register.html",
+                                   site_key=site_key,
+                                   error="Username already taken")
         users[username] = hash_password(password)
         save_users(users)
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
-              f"[INFO] New user registered successfully: '{username}'")
-        return redirect(url_for("login_page"))
-    return render_template("register.html")
+        return redirect(url_for("login_page", new=1))
+    return render_template("register.html", site_key=site_key)
 
 @app.route("/logout")
 def logout():
@@ -586,8 +608,13 @@ def handle_auth(data):
     user_status[request.sid] = {"user": username, "state": "online"}
     broadcast_presence()
 
+@socketio.on("typing")
+def handle_typing(data):
+    room_id = data.get("roomId")
+    if room_id:
+        emit("typing", data, room=room_id, include_self=False)
+
 def broadcast_room_roster(roomId):
-    """Send list of users currently in roomId only to that room."""
     names = rooms[roomId]["users"]
     socketio.emit("roster_update", {"roomId": roomId, "users": names}, room=roomId)
 

@@ -271,3 +271,13 @@ p {
     padding:8px 12px; margin-bottom:10px;
     border:1px solid #c3e6cb; border-radius:4px;
 }
+
+.typing-banner{
+    padding:4px 10px;
+    font-style:italic;
+    font-size:.9rem;
+    background:#fffbe6;
+    border-bottom:1px solid #e7d690;
+    color:#555;
+}
+

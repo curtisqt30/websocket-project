@@ -27,3 +27,12 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
         console.error("[ERROR]", err);
     });    
 });
+
+document.addEventListener("DOMContentLoaded", () => {
+    const banner = document.getElementById("acctBanner");
+    if (banner) {
+      setTimeout(() => banner.remove(), 6000);
+      document.getElementById("loginForm")
+              .addEventListener("submit", () => banner.remove());
+    }
+  });

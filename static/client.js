@@ -19,26 +19,36 @@ const socket = io("wss://curtisconnect.secure-tech.org", {
     reconnectionDelay: 2000    
 });
 
-console.log("[DEBUG] Attempting WebSocket Connection...");
+const typingUsers = new Set();
+function renderTypingBanner(){
+    const banner = document.getElementById("typingBanner");
+    if (typingUsers.size === 0){
+        banner.style.display = "none";
+        return;
+    }
+    banner.style.display = "block";
+    const names = [...typingUsers];
+    const text =
+        names.length === 1 ? `${names[0]} is typing…` :
+        names.length === 2 ? `${names[0]} and ${names[1]} are typing…` :
+        `${names.slice(0,-1).join(", ")} and ${names.slice(-1)} are typing…`;
+    banner.textContent = text;
+}
 
 socket.on("connect", () => {
-    console.log("[DEBUG] Socket.IO Connected Successfully");
+    console.log("Socket.IO Connected Successfully");
 
     if (username) {
-        console.log(`[DEBUG] Attempting Authentication with username: ${username}`);
         socket.emit("authenticate", { username });
     } else {
-        console.error("[DEBUG] No username found in session storage.");
+        console.error("No username found in session storage.");
     }
 
     if (roomId) {
-        console.log(`[DEBUG] Attempting to Join Room: ${roomId}`);
+        console.log(`Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
         fetchRoomAESKey(roomId);
     }
-    // } else {
-    //     console.error("[DEBUG] No roomId found in session storage.");
-    // }
 });
 
 socket.on("rate_limit", (data) => alert(data.msg));
@@ -76,18 +86,13 @@ socket.on("presence_update", stateList => {
 });
 
 // receive updates
-socket.on("typing", data => {
-    const {user, typing} = data;
-    const notice = document.getElementById("typingNotice") ||
-                   document.createElement("div");
-    notice.id = "typingNotice";
-    notice.style.fontStyle = "italic";
+socket.on("typing", ({user, typing}) => {
     if (typing) {
-        notice.textContent = `${user} is typing…`;
-        document.querySelector(".main-content").appendChild(notice);
+        typingUsers.add(user);
     } else {
-        notice.remove();
+        typingUsers.delete(user);
     }
+    renderTypingBanner();
 });
 
 fetch("/get_private_key", { method: "POST" })
@@ -353,6 +358,8 @@ document.addEventListener("DOMContentLoaded", function () {
             socket.emit("leave", { user: username, roomId: roomId });
             sessionStorage.removeItem("room"); 
             window.location.href = "/dashboard";
+            typingUsers.clear();
+            renderTypingBanner();
         });
     }
 
@@ -603,6 +610,8 @@ function setupEmojiPicker() {
             const messageInput = document.getElementById("messageInput");
             messageInput.value += emoji.native;
             updateCharCount();
+            const evt = new Event("input", { bubbles: true });
+            messageInput.dispatchEvent(evt);
         },
         theme: 'auto'
     });
