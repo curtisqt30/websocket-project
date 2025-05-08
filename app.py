@@ -1,6 +1,5 @@
 from gevent import monkey; monkey.patch_all()
 import os
-import ssl
 import hashlib
 import logging
 import time
@@ -18,8 +17,6 @@ from flask import (
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_session import Session
-from gevent.pywsgi import WSGIServer
-from geventwebsocket.handler import WebSocketHandler
 import bcrypt
 import requests
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -252,16 +249,6 @@ LOGS_FOLDER = "chat_logs"
 if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
-
-
-# SSL Setup
-ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-ssl_context.load_cert_chain("cert.pem", "key.pem")
-ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2  # Enforce TLS 1.2+
-ssl_context.set_ciphers("HIGH:!aNULL:!MD5:!RC4")
-
-# limit ssl errors atleats 1 per second
-last_ssl_error_time = 0
 
 # Store the last message timestamp for each user
 user_last_message_time = {}
@@ -683,30 +670,6 @@ def handle_exception(e):
         return jsonify({"success": False, "message": "Internal server error"}), 500
     return make_response("An internal error occurred.", 500)
 
-# Custom Gevent WSGIServer
-class SecureWSGIServer(WSGIServer):
-    def wrap_socket_and_handle(self, client_socket, address):
-        global last_ssl_error_time
-        try:
-            peek = client_socket.recv(5, socket.MSG_PEEK) 
-            if peek.startswith(b"GET /") and not (b"/socket.io/" in peek or b"/dashboard" in peek):
-                now = time.time()
-                if now - last_ssl_error_time > 1: 
-                    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    print(f"[{timestamp}] [SECURITY] Dropped invalid HTTP request on HTTPS socket.")
-                    last_ssl_error_time = now
-                client_socket.close()
-                return
-        
-            super().wrap_socket_and_handle(client_socket, address)
-        except Exception as e:
-            now = time.time()
-            if now - last_ssl_error_time > 1: 
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"[{timestamp}][SECURITY] SSL Error: {e}")
-                last_ssl_error_time = now
-            client_socket.close()
-
 @app.route("/clear_keys_cache", methods=["POST"])
 def clear_keys_cache():
     print("[INFO] Forcing client-side key refresh...")
@@ -724,3 +687,4 @@ def ping():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host="0.0.0.0", port=port)
+
