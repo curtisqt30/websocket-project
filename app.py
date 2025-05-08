@@ -68,8 +68,7 @@ if raw_db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
-
-if os.environ.get("FLASK_ENV", "production") == "development":
+if os.environ.get("INIT_DB", "false") == "true":
     with app.app_context():
         db.create_all()
 
