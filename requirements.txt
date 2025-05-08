@@ -11,3 +11,4 @@ cryptography
 requests
 Werkzeug
 psycopg2-binary
+gunicorn
