@@ -34,6 +34,8 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
+SECURE_FOLDER = "/tmp/secure"
+os.makedirs(SECURE_FOLDER, exist_ok=True)
 
 # Remove default Flask log handlers and quiet gevent/socketio
 for h in list(app.logger.handlers):
