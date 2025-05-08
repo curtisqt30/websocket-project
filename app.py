@@ -1,36 +1,36 @@
 from gevent import monkey; monkey.patch_all()
-import ssl
-import json
 import os
-import time
+import ssl
 import hashlib
-from flask import Flask, make_response, render_template, redirect, url_for, request, session, jsonify, send_from_directory, abort
+import logging
+import time
+import random
+import string
+import base64
+import datetime
+from datetime import datetime as dt_cls
+from threading import Thread
+from flask import (
+    Flask, make_response, render_template,
+    redirect, url_for, request, session,
+    jsonify, abort, send_from_directory
+)
 from flask_sqlalchemy import SQLAlchemy
 from flask_socketio import SocketIO, emit, join_room, disconnect
 from flask_session import Session
 from gevent.pywsgi import WSGIServer
 from geventwebsocket.handler import WebSocketHandler
-from threading import Thread
-import random
-import string
-import logging, sys
-import socket
 import bcrypt
-import datetime
-from datetime import datetime as dt_cls
-from cryptography.fernet import Fernet
-from werkzeug.utils import secure_filename
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-import base64
 import requests
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from werkzeug.utils import secure_filename
 
 # Flask App Config
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "secret-key"
+
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback-dev-key")
 app.config["SESSION_TYPE"] = "filesystem"
 app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
@@ -38,6 +38,7 @@ app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 
+# Remove default Flask log handlers and quiet gevent/socketio
 for h in list(app.logger.handlers):
     app.logger.removeHandler(h)
 logging.getLogger('gevent.ssl').setLevel(logging.CRITICAL)
@@ -49,32 +50,48 @@ logging.getLogger("werkzeug").disabled = True
 def silent_404(e):
     return "", 404
 
-# Database Config
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://db_user:db_pass@db_host/securechat'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Init
-db = SQLAlchemy(app)
 Session(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="gevent", path="/socket.io", transports=["websocket"], ping_timeout=20, ping_interval=5,)
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode="gevent",
+    path="/socket.io",
+    transports=["websocket"],
+    ping_timeout=20,
+    ping_interval=5,
+)
+
+# Database Config
+raw_db_url = os.environ["DATABASE_URL"]
+if raw_db_url.startswith("postgres://"):
+    raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+
+app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db = SQLAlchemy(app)
+
+if os.environ.get("FLASK_ENV", "production") == "development":
+    with app.app_context():
+        db.create_all()
 
 # Models
 class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
+    __tablename__ = "users"
+    id            = db.Column(db.Integer, primary_key=True)
+    username      = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, default=dt_cls.utcnow)
-
+    created_at    = db.Column(db.DateTime, default=dt_cls.utcnow)
 class Room(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    room_code = db.Column(db.String(4), unique=True, nullable=False)
+    __tablename__ = "rooms"
+    id         = db.Column(db.Integer, primary_key=True)
+    room_code  = db.Column(db.String(4), unique=True, nullable=False)
     created_at = db.Column(db.DateTime, default=dt_cls.utcnow)
-
 class Message(db.Model):
-    id = db.Column(db.BigInteger, primary_key=True)
-    room_id = db.Column(db.Integer, db.ForeignKey('room.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    text = db.Column(db.Text, nullable=False)
+    __tablename__ = "messages"
+    id        = db.Column(db.BigInteger, primary_key=True)
+    room_id   = db.Column(db.Integer, db.ForeignKey("rooms.id"), nullable=False)
+    user_id   = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    text      = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=dt_cls.utcnow)
 
 # User Status  
@@ -246,9 +263,6 @@ ssl_context.set_ciphers("HIGH:!aNULL:!MD5:!RC4")
 # limit ssl errors atleats 1 per second
 last_ssl_error_time = 0
 
-# User database
-USER_DB = "users.json"
-
 # Store the last message timestamp for each user
 user_last_message_time = {}
 
@@ -336,22 +350,6 @@ def log_message(roomId, username, msg):
 
 def generate_room():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-
-def load_users():
-    if os.path.exists(USER_DB):
-        try:
-            with open(USER_DB, "r") as file:
-                data = file.read().strip()
-                if not data:
-                    return {}
-                return json.loads(data)
-        except json.JSONDecodeError:
-            return {}
-    return {}
-
-def save_users(users):
-    with open(USER_DB, "w") as file:
-        json.dump(users, file, indent=4)
 
 def hash_password(password):
     salt = bcrypt.gensalt()
@@ -519,14 +517,14 @@ def get_room_aes_key(room_id):
 def create_room():
     if "username" not in session:
         return redirect(url_for("login_page"))
-    room_code = generate_room()
-    while room_code in rooms:
-        room_code = generate_room()
-    aes_key = os.urandom(32)
-    room_aes_keys[room_code] = aes_key
-    rooms[room_code] = {"users": []}
-    print(f"[INFO] Created room {room_code}")
-    return jsonify({"success": True, "roomId": room_code})
+    code = generate_room()
+    while Room.query.filter_by(room_code=code).first():
+        code = generate_room()
+    new_room = Room(room_code=code)
+    db.session.add(new_room)
+    db.session.commit()
+    room_aes_keys[code] = os.urandom(32)
+    return jsonify({"success": True, "roomId": code})
 
 @app.route("/join-room")
 def join_room_route():
@@ -550,30 +548,22 @@ def login_page():
         return render_template("login.html", new=new)
     if request.method == "POST":
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            username = request.form.get("username")
-            password = request.form.get("password")
-            users = load_users()
-            if username in users and verify_password(password, users[username]):
-                print(f"[INFO] Successful login for {username}, {ip}")
+            username = request.form["username"]
+            password = request.form["password"]
+            user = User.query.filter_by(username=username).first()
+            if user and verify_password(password, user.password_hash):
                 session["username"] = username
-                if ip in failed_login_attempts:
-                    del failed_login_attempts[ip]
                 return jsonify({"success": True})
-            print(f"[INFO] Failed login for {username}, {ip}")
-            record_failed_attempt(ip)
+            record_failed_attempt(get_client_ip())
             return jsonify({"success": False, "message": "Invalid credentials"})
         # Fallback for non-AJAX login
-        username = request.form.get("username")
-        password = request.form.get("password")
-        print(f"[INFO] Received form credentials - Username: {username}, {ip}")
-        users = load_users()
-        if username in users and verify_password(password, users[username]):
-            print(f"[INFO] Successful login for {username} (form), {ip}")
+        username = request.form["username"]
+        password = request.form["password"]
+        user = User.query.filter_by(username=username).first()
+        if user and verify_password(password, user.password_hash):
             session["username"] = username
             return redirect(url_for("dashboard_page"))
-        print(f"[INFO] Failed login (form) for {username}, {ip}")
         return render_template("login.html", error="Invalid credentials")
-    return render_template("login.html")
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -581,19 +571,19 @@ def register():
     if request.method == "POST":
         token = request.form.get("g-recaptcha-response")
         if not verify_captcha(token, get_client_ip()):
-            return render_template("register.html",
-                                   site_key=site_key,
+            return render_template("register.html", site_key=site_key,
                                    error="Captcha failed — please try again.")
         username = request.form["username"].strip()
         password = request.form["password"]
-        users = load_users()
-        if username in users:
-            return render_template("register.html",
-                                   site_key=site_key,
+        if User.query.filter_by(username=username).first():
+            return render_template("register.html", site_key=site_key,
                                    error="Username already taken")
-        users[username] = hash_password(password)
-        save_users(users)
+        new_user = User(username=username,
+                        password_hash=hash_password(password))
+        db.session.add(new_user)
+        db.session.commit()
         return redirect(url_for("login_page", new=1))
+
     return render_template("register.html", site_key=site_key)
 
 @app.route("/logout")
@@ -653,6 +643,14 @@ def handle_message(data):
     encrypted_message = data.get("msg", "")
     socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId)
     log_message(roomId, user, encrypted_message)
+    room = Room.query.filter_by(room_code=roomId).first()
+    user = User.query.filter_by(username=session.get("username")).first()
+    if room and user:
+        msg = Message(room_id=room.id,
+                    user_id=user.id,
+                    text=encrypted_message)
+        db.session.add(msg)
+        db.session.commit()
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -724,6 +722,8 @@ def ping():
 
 # ----- Run Flask Server -----
 if __name__ == "__main__":
-    print("[INFO] Flask server started and accepting HTTPS traffic on port 5000...")
-    http_server = SecureWSGIServer(("0.0.0.0", 5000), app, handler_class=WebSocketHandler)
+    # Use gevent WSGI+WebSocket server for production
+    http_server = SecureWSGIServer(("0.0.0.0", 5000), app,
+                                  handler_class=WebSocketHandler)
+    print("[INFO] Server listening on port 5000")
     http_server.serve_forever()

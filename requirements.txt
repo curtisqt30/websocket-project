@@ -10,3 +10,4 @@ bcrypt
 cryptography
 requests
 Werkzeug
+psycopg2-binary
