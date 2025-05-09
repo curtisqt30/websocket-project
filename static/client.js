@@ -137,16 +137,6 @@ fetch("/get_private_key", { method: "POST" })
     })
     .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
 
-fetch("/generate_aes_key", { method: "POST" })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            decryptAESKey(data.encrypted_aes_key); 
-        } else {
-            console.error("[ERROR] Failed to generate AES key:", data.message);
-        }
-    });
-
 async function getUserPublicKey() {
     let publicKey = sessionStorage.getItem("public_key");
     
@@ -197,7 +187,7 @@ async function decryptAESKey(encryptedKeyBase64) {
 
 async function decryptMessage(encryptedMsgBase64) {
     try {
-        const aesKeyBase64 = sessionStorage.getItem("aes_key");
+        const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
         const aesKey = await crypto.subtle.importKey(
             'raw',
             Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
