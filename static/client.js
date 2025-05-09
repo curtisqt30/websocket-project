@@ -34,7 +34,7 @@ function renderTypingBanner(){
 
 async function fetchRoomAESKey(roomId) {
     try {
-        const userPublicKey = await getUserPublicKey();
+        const userPublicKey = await getUserPublicKey();  
         const response = await fetch(`/get_room_aes_key/${roomId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -46,9 +46,10 @@ async function fetchRoomAESKey(roomId) {
             return;
         }
         const privateKeyPEM = sessionStorage.getItem("private_key");
-        const keyPem = privateKeyPEM.replace("-----BEGIN PRIVATE KEY-----", "")
-                                    .replace("-----END PRIVATE KEY-----", "")
-                                    .replace(/\s/g, '');
+        const keyPem = privateKeyPEM
+            .replace("-----BEGIN PRIVATE KEY-----", "")
+            .replace("-----END PRIVATE KEY-----", "")
+            .replace(/\s/g, '');
         const binaryDer = str2ab(atob(keyPem));
         const privateKey = await window.crypto.subtle.importKey(
             "pkcs8",
@@ -64,7 +65,6 @@ async function fetchRoomAESKey(roomId) {
             encryptedKeyBytes
         );
         const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
-        // Store the key correctly
         sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
         console.log(`[INFO] AES key stored for room ${roomId}`);
     } catch (err) {
@@ -80,8 +80,13 @@ socket.on("connect", () => {
     if (roomId) {
         console.log(`Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
-        fetchRoomAESKey(roomId);
     }
+});
+
+socket.on("user_joined", (data) => {
+    console.log(data.msg);
+    fetchRoomAESKey(roomId);
+    appendMessage(null, data.msg, true);
 });
 
 socket.on("rate_limit", (data) => alert(data.msg));
