@@ -34,7 +34,11 @@ function renderTypingBanner(){
 
 async function fetchRoomAESKey(roomId) {
     try {
-        const userPublicKey = await getUserPublicKey();  
+        const userPublicKey = await getUserPublicKey();
+        if (!userPublicKey) {
+            console.error("[ERROR] User public key missing");
+            return;
+        }
         const response = await fetch(`/get_room_aes_key/${roomId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -46,11 +50,15 @@ async function fetchRoomAESKey(roomId) {
             return;
         }
         const privateKeyPEM = sessionStorage.getItem("private_key");
-        const keyPem = privateKeyPEM
+        if (!privateKeyPEM) {
+            console.error("[ERROR] Private key not found in sessionStorage");
+            return;
+        }
+        const keyPemClean = privateKeyPEM
             .replace("-----BEGIN PRIVATE KEY-----", "")
             .replace("-----END PRIVATE KEY-----", "")
-            .replace(/\s/g, '');
-        const binaryDer = str2ab(atob(keyPem));
+            .replace(/\s+/g, '');
+        const binaryDer = str2ab(atob(keyPemClean));
         const privateKey = await window.crypto.subtle.importKey(
             "pkcs8",
             binaryDer,
@@ -66,11 +74,12 @@ async function fetchRoomAESKey(roomId) {
         );
         const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
         sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
-        console.log(`[INFO] AES key stored for room ${roomId}`);
+        console.log(`[INFO] AES key successfully stored for room ${roomId}`);
     } catch (err) {
         console.error("[ERROR] fetchRoomAESKey failed:", err);
     }
 }
+
 
 socket.on("connect", () => {
     console.log("Socket.IO Connected Successfully");
@@ -182,6 +191,12 @@ async function decryptAESKey(encryptedKeyBase64) {
             encryptedKeyBytes
         );
         const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
+        const rawKeyBytes = Uint8Array.from(atob(b64Key), c => c.charCodeAt(0));
+        if (rawKeyBytes.length !== 16 && rawKeyBytes.length !== 32) {
+            console.error("[ERROR] Invalid AES Key size. Expected 16 or 32 bytes.");
+            return;
+        }
+        
         sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
         return b64Key;
     } catch (error) {

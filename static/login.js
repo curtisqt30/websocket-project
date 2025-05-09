@@ -29,6 +29,11 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
 });
 
 document.addEventListener("DOMContentLoaded", () => {
+    if (new URLSearchParams(window.location.search).get("clearStorage") === "1") {
+        console.log("[INFO] Clearing sessionStorage on logout");
+        sessionStorage.clear();
+    }
+
     const banner = document.getElementById("acctBanner");
     if (banner) {
       setTimeout(() => banner.remove(), 6000);

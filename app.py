@@ -610,7 +610,8 @@ def logout():
     username = session['username']
     print(f"[{dt_cls.now().strftime('%Y-%m-%d %H:%M:%S')}] [LOGOUT] {username} logged out.")
     session.pop("username", None)
-    return redirect(url_for("login_page"))
+    return redirect(url_for("login_page") + "?clearStorage=1")
+
 
 @app.route('/favicon.ico')
 def favicon():
