@@ -14,47 +14,41 @@
     <script src="{{ url_for('static', filename='marked.min.js') }}"></script>
     <script src="{{ url_for('static', filename='emoji-mart.min.js') }}"></script>
     <script src="{{ url_for('static', filename='client.js') }}"></script>
-
 </head>
 <body>
     <div class="app-container">
         <!-- Sidebar for Rooms -->
         <div class="sidebar">
             <h2>CurtisConnect</h2>
-
             <button id="createRoom">Create a Room</button>
             <input type="text" id="roomCode" placeholder="Enter Room Code" maxlength="4">
             <button id="joinRoom">Join a Room</button>
-
             <div class="room-list" id="roomList"></div>
-
             <h1>Chatroom: <span id="roomId"></span></h1>
-
             <button id="leaveRoomButton" class="leave-btn" style="display: none;">🏠 Leave Room</button>
-
             <p><a href="/logout">Logout</a></p>
         </div>
 
         <!-- Main Chat Section -->
         <div class="main-content">
 
+            <!-- Welcome Panel -->
             <div class="welcome-panel">
                 <h2>Welcome to CurtisConnect</h2>
                 <p>Please create or join a room using the sidebar to start chatting.</p>
             </div>
 
-            <div class="chat-header"></div>
-              
+            <!-- Chat Pane -->
             <div class="chat-pane">
                 <div id="messages">
                     <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
                         You're currently not in a chatroom. Create or join a room using the sidebar.
                     </p>
                 </div>
-            
                 <div id="typingBanner" class="typing-banner" style="display:none;font-style:italic;margin:4px 8px;"></div>
             </div>
-            
+
+            <!-- Message Input (Placed Outside Chat Pane for Fixed Positioning) -->
             <div class="message-input">
                 <div class="top-actions">
                     <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
@@ -66,12 +60,13 @@
             </div>
         
             <p id="charCount">150 characters remaining</p>
-            
+
+            <!-- Room Roster -->
             <div id="roomRoster">
                 <h3>In room</h3>
                 <div id="rosterList"></div>
             </div>
-            
+
         </div>
     </div>
 </body>

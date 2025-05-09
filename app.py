@@ -269,13 +269,23 @@ if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
 # --------------------------- Functions ----------------
-# @app.after_request
-# def set_headers(response):
-#     response.headers["X-Frame-Options"] = "DENY"
-#     response.headers["X-Content-Type-Options"] = "nosniff"
-#     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-#     response.headers["Content-Security-Policy"] = "default-src 'self'"
-#     return response
+@app.after_request
+def apply_security_headers(response):
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' https://www.google.com https://www.gstatic.com https://cdn.jsdelivr.net 'unsafe-inline'; "
+        "frame-src https://www.google.com https://www.gstatic.com; "
+        "style-src 'self' 'unsafe-inline'; "
+        "connect-src 'self' https://curtisconnect.secure-tech.org wss://curtisconnect.secure-tech.org https://cdn.jsdelivr.net https://www.google.com; "
+        "img-src 'self' data: blob: https://www.gstatic.com;"
+    )
+    return response
 
 def verify_captcha(token, remote_ip=None):
     payload = {
@@ -611,7 +621,6 @@ def logout():
     print(f"[{dt_cls.now().strftime('%Y-%m-%d %H:%M:%S')}] [LOGOUT] {username} logged out.")
     session.pop("username", None)
     return redirect(url_for("login_page") + "?clearStorage=1")
-
 
 @app.route('/favicon.ico')
 def favicon():
