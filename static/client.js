@@ -111,12 +111,8 @@ socket.on("room_invalid", (data) => {
 });
 
 socket.on("presence_update", stateList => {
-    const div = document.getElementById("onlineUsersList") || 
-                document.createElement("div");
-    div.id = "onlineUsersList";
-    document.querySelector(".sidebar").appendChild(div);
-    div.innerHTML = "<h3>Users:</h3>" +
-      stateList.map(u => `<p>${u.user} <span style="color:gray">(${u.state})</span></p>`).join("");
+    const rosterList = document.getElementById("rosterList");
+    rosterList.innerHTML = stateList.map(u => `<p>${u.user} (${u.state})</p>`).join("");
 });
 
 // receive updates
@@ -364,21 +360,15 @@ document.addEventListener("DOMContentLoaded", function () {
     const uploadButton = document.getElementById("uploadButton");
 
     // Display message for no chatroom
+    const welcomePanel = document.querySelector(".welcome-panel");
+    const chatPane = document.querySelector(".chat-pane");
+    
     if (!roomId || roomId === "None") {
-        messagesContainer.innerHTML = `
-            <p style="color: gray; font-style: italic; text-align: center; margin-top: 20px;">
-                You're currently not in a chatroom. Create or join a room using the sidebar.
-            </p>`;
-        messageInput.disabled = true;
-        sendButton.disabled = true;
-        emojiButton.disabled = true;
-        uploadButton.disabled = true;
+        if (welcomePanel) welcomePanel.style.display = "block";
+        if (chatPane) chatPane.style.display = "none";
     } else {
-        messagesContainer.innerHTML = '';
-        messageInput.disabled = false;
-        sendButton.disabled = false;
-        emojiButton.disabled = false;
-        uploadButton.disabled = false;
+        if (welcomePanel) welcomePanel.style.display = "none";
+        if (chatPane) chatPane.style.display = "block";
     }
 
     // Leave room button functionality

@@ -1,3 +1,9 @@
+.app-container,
+.main-content,
+.chat-pane {
+    height: 100%;
+}
+
 body {
     font-family: Arial, sans-serif;
     display: flex;
@@ -44,7 +50,8 @@ input {
 }
 
 button {
-    width: 100%;
+    width: auto;
+    min-width: 120px;
     padding: 10px;
     background: #007bff;
     color: white;
@@ -90,12 +97,15 @@ p {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    background: #fff;
 }
 
 .main-content {
     flex: 1 1 auto;
     display: flex;
+    flex-wrap: wrap;
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
@@ -124,12 +134,11 @@ p {
 }
 
 .room-list {
-    margin-top: 15px;
+    flex-grow: 1;
+    overflow-y: auto;
     background-color: #f0f2f5;
     padding: 10px;
     border-radius: 8px;
-    max-height: 300px;
-    overflow-y: auto;
 }
 
 .room-item {
@@ -288,5 +297,28 @@ p {
     background:#fffbe6;
     border-bottom:1px solid #e7d690;
     color:#555;
+}
+
+.welcome-panel {
+    margin: auto;
+    text-align: center;
+    color: #555;
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .sidebar {
+        width: 100%;
+        box-shadow: none;
+    }
+    .main-content {
+        flex-direction: column;
+    }
+    .chat-pane, #roomRoster {
+        width: 100%;
+    }
 }
 
