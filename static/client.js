@@ -134,23 +134,11 @@ async function getUserPublicKey() {
 
 async function decryptAESKey(encryptedKeyBase64) {
     try {
-        const privateKeyPEM = sessionStorage.getItem("private_key")
-            .replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, '');
-        const privateKeyDer = Uint8Array.from(atob(privateKeyPEM), c => c.charCodeAt(0));
-        const privateKey = await crypto.subtle.importKey(
-            "pkcs8",
-            privateKeyDer.buffer,
-            { name: "RSA-OAEP", hash: "SHA-256" },
-            false,
-            ["decrypt"]
-        );
-        const encryptedKey = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
-        const decryptedKey = await crypto.subtle.decrypt(
-            { name: "RSA-OAEP" },
-        privateKey,
-            encryptedKey
-        );
-        const aesKeyB64 = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
+        const aesKeyBytes = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
+        if (![16, 32].includes(aesKeyBytes.length)) {
+            throw new Error(`[AES KEY] Invalid key length: ${aesKeyBytes.length} bytes`);
+        }
+        const aesKeyB64 = btoa(String.fromCharCode(...aesKeyBytes));
         sessionStorage.setItem("aes_key", aesKeyB64);
         return aesKeyB64;
     } catch (error) {
@@ -207,23 +195,57 @@ async function encryptMessage(plainText) {
     return btoa(String.fromCharCode(...combined));
 }
 
-async function fetchRoomAESKey(roomId) {
-    const userPublicKey = await getUserPublicKey();
-    const response = await fetch(`/get_room_aes_key/${roomId}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ user_public_key: userPublicKey })
-    });
-    const data = await response.json();
-    if (data.success) {
-        const encryptedAESKey = data.encrypted_room_aes_key;
-        const aesKey = await decryptAESKey(encryptedAESKey); 
-        sessionStorage.setItem(`room_aes_key_${roomId}`, aesKey);
-        console.log(`AES key stored for room ${roomId}`);
-    } else {
-        console.error("Failed to fetch AES key:", data.message);
+async function decryptAESKey(encryptedKeyBase64) {
+    try {
+        const privateKeyPEM = sessionStorage.getItem("private_key");
+        if (!privateKeyPEM) throw new Error("Private key not found");
+
+        const keyPem = privateKeyPEM
+            .replace("-----BEGIN PRIVATE KEY-----", "")
+            .replace("-----END PRIVATE KEY-----", "")
+            .replace(/\s/g, '');
+
+        const binaryDer = str2ab(atob(keyPem));  // Convert base64 -> ArrayBuffer
+
+        const privateKey = await window.crypto.subtle.importKey(
+            "pkcs8",
+            binaryDer,
+            {
+                name: "RSA-OAEP",
+                hash: "SHA-256"
+            },
+            false,
+            ["decrypt"]
+        );
+
+        const encryptedKeyBytes = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
+
+        const decryptedKey = await window.crypto.subtle.decrypt(
+            {
+                name: "RSA-OAEP"
+            },
+            privateKey,
+            encryptedKeyBytes
+        );
+
+        const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
+        sessionStorage.setItem("aes_key", b64Key);
+        return b64Key;
+    } catch (error) {
+        console.error("[ERROR] decryptAESKey failed:", error);
+        return null;
     }
 }
+
+function str2ab(str) {
+    const buf = new ArrayBuffer(str.length);
+    const bufView = new Uint8Array(buf);
+    for (let i = 0, strLen = str.length; i < strLen; i++) {
+        bufView[i] = str.charCodeAt(i);
+    }
+    return buf;
+}
+
 
 async function encryptRoomMessage(roomId, plainText) {
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
