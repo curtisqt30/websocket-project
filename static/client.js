@@ -116,7 +116,9 @@ socket.on("roster_update", (data) => {
     rosterEl.innerHTML = data.users.map(userObj => {
         const statusClass = userObj.state === "online" ? "status-online" :
                             userObj.state === "idle" ? "status-idle" : "status-offline";
-        return `<div class="roster-row"><span class="status-dot ${statusClass}"></span> ${userObj.user}</div>`;
+        return `<div class="roster-row">
+                    <span class="status-dot ${statusClass}"></span> ${userObj.user}
+                </div>`;
     }).join('');
 });
 
@@ -487,6 +489,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const room = urlParams.get("roomId") || "None";
     document.getElementById("roomId").textContent = room;
+    // Recheck visibility after setting roomId display
+    if (!room || room === "None") {
+        if (welcomePanel) welcomePanel.style.display = "block";
+        if (chatPane) chatPane.style.display = "none";
+    } else {
+        if (welcomePanel) welcomePanel.style.display = "none";
+        if (chatPane) chatPane.style.display = "block";
+    }
     sessionStorage.setItem("room", roomId);
 });
 
