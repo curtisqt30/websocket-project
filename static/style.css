@@ -66,15 +66,19 @@ body, html {
 }
 
 /* MAIN CHAT AREA */
-.main-chat-area {
+.content-area {
+    display: flex;
     flex: 1;
+    height: 100vh;
+}
+
+.main-chat-area {
     display: flex;
     flex-direction: column;
-    background: #ffffff;
+    flex: 1;
     border-left: 1px solid #ddd;
     border-right: 1px solid #ddd;
-    height: 100%;
-
+    overflow: hidden;
 }
 
 .welcome-panel {
@@ -89,16 +93,13 @@ body, html {
     flex-direction: column;
     flex: 1;
     overflow: hidden;
-    height: 100%;
 }
 
 .messages {
     flex: 1;
-    padding: 10px;
     overflow-y: auto;
-    background: #fff;
-    border-top: 1px solid #ddd;
-    border-bottom: 1px solid #ddd;
+    padding: 10px;
+    background: #ffffff;
 }
 
 .chat-pane,
