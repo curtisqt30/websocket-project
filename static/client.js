@@ -94,7 +94,9 @@ socket.on("connect", () => {
 
 socket.on("user_joined", (data) => {
     console.log(data.msg);
-    fetchRoomAESKey(roomId);
+    if (roomId && roomId !== "None") { 
+        fetchRoomAESKey(roomId);
+    }
     appendMessage(null, data.msg, true);
 });
 
@@ -126,7 +128,23 @@ socket.on("room_invalid", (data) => {
 
 socket.on("presence_update", stateList => {
     const rosterList = document.getElementById("rosterList");
-    rosterList.innerHTML = stateList.map(u => `<p>${u.user} (${u.state})</p>`).join("");
+    rosterList.innerHTML = "";
+
+    stateList.forEach(userData => {
+        const userEl = document.createElement("div");
+        userEl.classList.add("user-status");
+
+        const statusDot = document.createElement("span");
+        statusDot.classList.add("status-dot");
+        statusDot.style.backgroundColor = userData.state === "online" ? "green" : "red";
+
+        const userText = document.createElement("span");
+        userText.textContent = userData.user;
+
+        userEl.appendChild(statusDot);
+        userEl.appendChild(userText);
+        rosterList.appendChild(userEl);
+    });
 });
 
 // receive updates
