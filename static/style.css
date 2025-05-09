@@ -115,6 +115,7 @@ p {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    height: 100%;
     padding: 20px;
     box-sizing: border-box;
 }
@@ -254,6 +255,15 @@ p {
 #messages img {
     vertical-align: top; 
     display: inline-block;
+}
+
+#messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: #fff;
 }
 
 #roomRoster {

@@ -94,6 +94,7 @@ class Room(db.Model):
     __tablename__ = "rooms"
     id         = db.Column(db.Integer, primary_key=True)
     room_code  = db.Column(db.String(4), unique=True, nullable=False)
+    aes_key    = db.Column(db.String(64), nullable=True)
     created_at = db.Column(db.DateTime, default=dt_cls.utcnow)
 class Message(db.Model):
     __tablename__ = "messages"
@@ -103,6 +104,9 @@ class Message(db.Model):
     text      = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=dt_cls.utcnow)
 
+# Generate AES key per room
+room_aes_keys = {}
+
 with app.app_context():
     if os.environ.get("INIT_DB", "false") == "true":
         print("[INFO] Creating database tables...")
@@ -110,6 +114,8 @@ with app.app_context():
     existing_rooms = Room.query.all()
     for room in existing_rooms:
         rooms[room.room_code] = {"users": []}
+        if room.aes_key:
+            room_aes_keys[room.room_code] = base64.b64decode(room.aes_key)
     print(f"[INFO] Loaded {len(rooms)} rooms into memory.")
 
 # User Status  
@@ -490,9 +496,6 @@ def uploaded_file(filename):
         print(f"[ERROR] File serving failed: {e}")
         return jsonify({"success": False, "message": "Failed to serve file."}), 500
 
-# Generate AES key per room
-room_aes_keys = {}
-
 @app.route("/get_room_aes_key/<room_id>", methods=["POST"])
 def get_room_aes_key(room_id):
     username = session.get("username")
@@ -505,7 +508,12 @@ def get_room_aes_key(room_id):
         user_public_key = serialization.load_pem_public_key(user_public_key_pem.encode())
         aes_key = room_aes_keys.get(room_id)
         if not aes_key:
-            return jsonify({"success": False, "message": "Room AES key not found."}), 404
+            room = Room.query.filter_by(room_code=room_id).first()
+            if room and room.aes_key:
+                aes_key = base64.b64decode(room.aes_key)
+                room_aes_keys[room_id] = aes_key  # Cache it
+            else:
+                return jsonify({"success": False, "message": "Room AES key not found."}), 404
         encrypted_aes_key = user_public_key.encrypt(
             aes_key,
             padding.OAEP(
@@ -527,10 +535,12 @@ def create_room():
     code = generate_room()
     while Room.query.filter_by(room_code=code).first():
         code = generate_room()
-    new_room = Room(room_code=code)
+    aes_key_bytes = os.urandom(32)
+    aes_key_b64 = base64.b64encode(aes_key_bytes).decode()
+    new_room = Room(room_code=code, aes_key=aes_key_b64)
     db.session.add(new_room)
     db.session.commit()
-    room_aes_keys[code] = os.urandom(32)
+    room_aes_keys[code] = aes_key_bytes
     rooms[code] = {"users": []}
     return jsonify({"success": True, "roomId": code})
 
