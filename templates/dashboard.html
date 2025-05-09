@@ -4,70 +4,53 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CurtisConnect</title>
-
-    <!-- CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='emoji-mart.css') }}">
-    
-    <!-- JS -->
     <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
     <script src="{{ url_for('static', filename='marked.min.js') }}"></script>
     <script src="{{ url_for('static', filename='emoji-mart.min.js') }}"></script>
     <script src="{{ url_for('static', filename='client.js') }}"></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar for Rooms -->
-        <div class="sidebar">
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
             <h2>CurtisConnect</h2>
             <button id="createRoom">Create a Room</button>
-            <input type="text" id="roomCode" placeholder="Enter Room Code" maxlength="4">
-            <button id="joinRoom">Join a Room</button>
-            <div class="room-list" id="roomList"></div>
-            <h1>Chatroom: <span id="roomId"></span></h1>
+            <input type="text" id="roomCode" placeholder="Room Code" maxlength="4">
+            <button id="joinRoom">Join Room</button>
+            <div id="roomList"></div>
+            <h3>Current Room: <span id="roomId"></span></h3>
             <button id="leaveRoomButton" class="leave-btn" style="display: none;">🏠 Leave Room</button>
             <p><a href="/logout">Logout</a></p>
-        </div>
+        </aside>
 
-        <!-- Main Chat Section -->
-        <div class="main-content">
-
-            <!-- Welcome Panel -->
+        <!-- Main Area -->
+        <main class="chat-container">
             <div class="welcome-panel">
                 <h2>Welcome to CurtisConnect</h2>
-                <p>Please create or join a room using the sidebar to start chatting.</p>
+                <p>Please join or create a room to start chatting.</p>
             </div>
 
-            <!-- Chat Pane -->
             <div class="chat-pane">
-                <div id="messages">
-                    <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
-                        You're currently not in a chatroom. Create or join a room using the sidebar.
-                    </p>
-                </div>
-                <div id="typingBanner" class="typing-banner" style="display:none;font-style:italic;margin:4px 8px;"></div>
-            </div>
-
-            <!-- Message Input (Placed Outside Chat Pane for Fixed Positioning) -->
-            <div class="message-input">
-                <div class="top-actions">
+                <div id="messages" class="messages"></div>
+                <div id="typingBanner" class="typing-banner" style="display:none;"></div>
+                <div class="input-area">
                     <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
-                    <button id="emojiButton">😊 Emoji</button>
-                    <button id="uploadButton">📁 File Upload</button>
+                    <div class="input-actions">
+                        <button id="emojiButton">😊 Emoji</button>
+                        <button id="uploadButton">📁 File Upload</button>
+                        <button id="sendButton">Send</button>
+                    </div>
+                    <div id="charCount">150 characters remaining</div>
+                    <div id="emoji-picker-container" style="display:none;"></div>
                 </div>
-                <button id="sendButton">Send</button>
-                <div id="emoji-picker-container" style="display:none;"></div>
             </div>
-        
-            <p id="charCount">150 characters remaining</p>
 
-            <!-- Room Roster -->
-            <div id="roomRoster">
-                <h3>In room</h3>
+            <div id="roomRoster" class="roster">
+                <h3>In Room</h3>
                 <div id="rosterList"></div>
             </div>
-
-        </div>
+        </main>
     </div>
 </body>
 </html>
