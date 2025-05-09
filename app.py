@@ -28,6 +28,8 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback-dev-key")
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
@@ -47,6 +49,7 @@ logging.getLogger("werkzeug").disabled = True
 def silent_404(e):
     return "", 404
 
+Session(app)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -327,7 +330,7 @@ def decrypt_log_entry(encrypted_entry_b64, aes_key):
     return aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
 
 def log_message(roomId, username, msg):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = dt_cls.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] {username}: {msg}"
     encrypted_entry = encrypt_log_entry(log_entry, log_aes_key)
     log_file = os.path.join(LOGS_FOLDER, f"{roomId}.enc")
@@ -351,7 +354,7 @@ def monitor_inactivity():
             if now - last_msg_time > 1800:   
                 username = session.get("username", "Unknown")
                 roomId = session.get("room", "Unknown")
-                print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] "
+                print(f"[{dt_cls.now().strftime('%Y-%m-%d %H:%M:%S')}] "
                       f"[INFO] Forcefully disconnected user '{username}' in room '{roomId}' due to inactivity.")
                 socketio.emit("force_disconnect", {"msg": "You have been disconnected due to inactivity."}, room=sid)
                 socketio.server.disconnect(sid)
@@ -366,7 +369,7 @@ user_last_message_time = {}
 def remove_room(roomId):
     if roomId in rooms:
         del rooms[roomId]
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] Room '{roomId}' has been removed.")
+        print(f"[{dt_cls.now().strftime('%Y-%m-%d %H:%M:%S')}] [INFO] Room '{roomId}' has been removed.")
 
 # --------------------------- Routes -------------------
 @app.route("/")
@@ -575,7 +578,7 @@ def register():
 @app.route("/logout")
 def logout():
     username = session['username']
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [LOGOUT] {username} logged out.")
+    print(f"[{dt_cls.now().strftime('%Y-%m-%d %H:%M:%S')}] [LOGOUT] {username} logged out.")
     session.pop("username", None)
     return redirect(url_for("login_page"))
 
