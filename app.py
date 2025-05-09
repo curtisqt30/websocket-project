@@ -434,7 +434,6 @@ def get_public_key():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
-
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -443,13 +442,19 @@ def upload_file():
     room_id = request.form.get('roomId')
     if file.filename == '':
         return jsonify({"success": False, "message": "No selected file"}), 400
+    aes_key = room_aes_keys.get(room_id)
+    if not aes_key:
+        print(f"[ERROR] No AES key found for room {room_id}")
+        return jsonify({"success": False, "message": "Room AES key missing"}), 400
+    print(f"[DEBUG] AES Key for upload {room_id}: {base64.b64encode(aes_key).decode()}")
     if file:
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file_data = file.read()
-        encrypted_data = encrypt_message(file_data, room_aes_keys.get(room_id))
-        with open(filepath, "w") as f:
-            f.write(encrypted_data)
+        encrypted_data = encrypt_message(file_data, aes_key)
+        # WRITE IN BINARY MODE
+        with open(filepath, "wb") as f:
+            f.write(encrypted_data.encode('utf-8'))
         return jsonify({"success": True, "filename": filename}), 200
     return jsonify({"success": False, "message": "Something went wrong"}), 500
 
@@ -459,10 +464,12 @@ def download_file(filename):
     room_id = request.json.get("roomId")
     aes_key = room_aes_keys.get(room_id)
     if not aes_key:
+        print(f"[ERROR] No AES key found for room {room_id}")
         return jsonify({"success": False, "message": "Room AES key missing"}), 400
+    print(f"[DEBUG] AES Key for download {room_id}: {base64.b64encode(aes_key).decode()}")
     with open(file_path, "rb") as f:
         encrypted_data_b64 = f.read().decode('utf-8')
-    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True) 
+    decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)
     mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
     response = make_response(decrypted_data)
     response.headers['Content-Type'] = mime_type
