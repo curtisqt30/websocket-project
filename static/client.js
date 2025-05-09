@@ -174,7 +174,7 @@ async function decryptMessage(encryptedMsgBase64) {
 }
 
 async function encryptMessage(plainText) {
-    const aesKeyBase64 = sessionStorage.getItem("aes_key");
+    const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
     const aesKey = await crypto.subtle.importKey(
         'raw',
         Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
@@ -199,14 +199,11 @@ async function decryptAESKey(encryptedKeyBase64) {
     try {
         const privateKeyPEM = sessionStorage.getItem("private_key");
         if (!privateKeyPEM) throw new Error("Private key not found");
-
         const keyPem = privateKeyPEM
             .replace("-----BEGIN PRIVATE KEY-----", "")
             .replace("-----END PRIVATE KEY-----", "")
             .replace(/\s/g, '');
-
-        const binaryDer = str2ab(atob(keyPem));  // Convert base64 -> ArrayBuffer
-
+        const binaryDer = str2ab(atob(keyPem)); 
         const privateKey = await window.crypto.subtle.importKey(
             "pkcs8",
             binaryDer,
@@ -217,9 +214,7 @@ async function decryptAESKey(encryptedKeyBase64) {
             false,
             ["decrypt"]
         );
-
         const encryptedKeyBytes = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
-
         const decryptedKey = await window.crypto.subtle.decrypt(
             {
                 name: "RSA-OAEP"
@@ -227,9 +222,8 @@ async function decryptAESKey(encryptedKeyBase64) {
             privateKey,
             encryptedKeyBytes
         );
-
         const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
-        sessionStorage.setItem("aes_key", b64Key);
+        sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
         return b64Key;
     } catch (error) {
         console.error("[ERROR] decryptAESKey failed:", error);
@@ -245,7 +239,6 @@ function str2ab(str) {
     }
     return buf;
 }
-
 
 async function encryptRoomMessage(roomId, plainText) {
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
