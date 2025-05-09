@@ -70,14 +70,18 @@ if raw_db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = raw_db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
-with app.app_context():
-    if os.environ.get("INIT_DB", "false") == "true":
-        print("[INFO] Creating database tables...")
-        db.create_all()
-    existing_rooms = Room.query.all()
-    for room in existing_rooms:
-        rooms[room.room_code] = {"users": []}
-    print(f"[INFO] Loaded {len(rooms)} rooms into memory.")
+
+# Store the last message timestamp for each user
+user_last_message_time = {}
+
+# Active rooms
+rooms = {}
+
+# Active users
+connected_users = {}
+
+# Login page brute force prevention
+failed_login_attempts = {}
 
 # Models
 class User(db.Model):
@@ -98,6 +102,15 @@ class Message(db.Model):
     user_id   = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     text      = db.Column(db.Text, nullable=False)
     timestamp = db.Column(db.DateTime, default=dt_cls.utcnow)
+
+with app.app_context():
+    if os.environ.get("INIT_DB", "false") == "true":
+        print("[INFO] Creating database tables...")
+        db.create_all()
+    existing_rooms = Room.query.all()
+    for room in existing_rooms:
+        rooms[room.room_code] = {"users": []}
+    print(f"[INFO] Loaded {len(rooms)} rooms into memory.")
 
 # User Status  
 user_status = {}
@@ -256,19 +269,6 @@ logging.getLogger("engineio").setLevel(logging.DEBUG)
 LOGS_FOLDER = "chat_logs"
 if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
-
-
-# Store the last message timestamp for each user
-user_last_message_time = {}
-
-# Active rooms
-rooms = {}
-
-# Active users
-connected_users = {}
-
-# Login page brute force prevention
-failed_login_attempts = {}
 
 # --------------------------- Functions ----------------
 def verify_captcha(token, remote_ip=None):
