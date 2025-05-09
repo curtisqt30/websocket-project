@@ -354,7 +354,8 @@ button:focus {
 }
 
 #roomRoster {
-    flex: 0 0 180px;
+    flex: 1;
+    max-width: 200px;
     border-left: 1px solid #ccc;
     padding: 10px;
     overflow-y: auto;
@@ -403,7 +404,7 @@ button:focus {
 
 .chat-container {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     flex: 1;
     background: #f4f4f4;
     position: relative;

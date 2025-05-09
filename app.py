@@ -308,11 +308,14 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def broadcast_presence():
-    unique_users = {}
-    for data in user_status.values():
-        unique_users[data["user"]] = data
-    socketio.emit("presence_update", list(unique_users.values()), to=None)
-
+    now = time.time()
+    updated_status = []
+    for sid, data in user_status.items():
+        username = data.get("user")
+        last_seen = data.get("last", 0)
+        state = "online" if now - last_seen < 35 else "idle"
+        updated_status.append({"user": username, "state": state})
+    socketio.emit("presence_update", updated_status, to=None)
 
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATTEMPTS = 3
@@ -626,6 +629,11 @@ def logout():
 def favicon():
     return '', 204
 # ----------------------------- WebSocket Events -----
+@socketio.on("heartbeat")
+def heartbeat(data):
+    if request.sid in user_status:
+        user_status[request.sid]["last"] = time.time()
+
 @socketio.on("connect")
 def handle_connect():
     print(f"[INFO] New Connection SID: {request.sid}")
@@ -636,7 +644,7 @@ def handle_connect():
 @socketio.on("authenticate")
 def handle_auth(data):
     username = data.get("username")
-    user_status[request.sid] = {"user": username, "state": "online"}
+    user_status[request.sid] = {"user": username, "state": "online", "last": time.time()}
     broadcast_presence()
 
 @socketio.on("typing")

@@ -16,6 +16,12 @@ const socket = io(window.location.origin, {
     transports: ["websocket"]
 });
 
+setInterval(() => {
+    if (socket && socket.connected) {
+        socket.emit("heartbeat", { user: username });
+    }
+}, 30000);  // every 30 seconds
+
 const typingUsers = new Set();
 function renderTypingBanner(){
     const banner = document.getElementById("typingBanner");
@@ -80,15 +86,15 @@ async function fetchRoomAESKey(roomId) {
     }
 }
 
-
 socket.on("connect", () => {
     console.log("Socket.IO Connected Successfully");
     if (username) {
         socket.emit("authenticate", { username });
     }
-    if (roomId) {
+    if (roomId && roomId !== "None") {
         console.log(`Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
+        fetchRoomAESKey(roomId);
     }
 });
 
@@ -130,13 +136,10 @@ socket.on("room_invalid", (data) => {
 socket.on("presence_update", stateList => {
     const rosterList = document.getElementById("rosterList");
     rosterList.innerHTML = stateList.map(u => {
-        let statusClass = "status-offline";
-        if (u.state === "online") statusClass = "status-online";
-        if (u.state === "idle") statusClass = "status-idle";
-        return `<div class="roster-row"><span class="${statusClass} status-dot"></span>${u.user}</div>`;
+        const color = u.state === "online" ? "green" : "gray";
+        return `<p style="color:${color}">${u.user} (${u.state})</p>`;
     }).join("");
 });
-
 
 // receive updates
 socket.on("typing", ({user, typing}) => {
