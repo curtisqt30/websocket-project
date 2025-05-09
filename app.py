@@ -271,6 +271,14 @@ if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
 # --------------------------- Functions ----------------
+@app.after_request
+def set_headers(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    return response
+
 def verify_captcha(token, remote_ip=None):
     payload = {
         "secret":  os.environ["RECAPTCHA_SECRET"],
@@ -292,7 +300,11 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def broadcast_presence():
-    socketio.emit("presence_update", list(user_status.values()), to=None)
+    unique_users = {}
+    for data in user_status.values():
+        unique_users[data["user"]] = data
+    socketio.emit("presence_update", list(unique_users.values()), to=None)
+
 
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATTEMPTS = 3
@@ -519,6 +531,7 @@ def create_room():
     db.session.add(new_room)
     db.session.commit()
     room_aes_keys[code] = os.urandom(32)
+    rooms[code] = {"users": []}
     return jsonify({"success": True, "roomId": code})
 
 @app.route("/join-room")
@@ -624,6 +637,7 @@ def handle_join(data):
         if username not in rooms[roomId]["users"]:
             rooms[roomId]["users"].append(username)
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
+        session["room"] = roomId
         broadcast_room_roster(roomId)
     else:
         emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
@@ -649,7 +663,13 @@ def handle_message(data):
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    user_status.pop(request.sid, None)
+    data = user_status.pop(request.sid, None)
+    if data:
+        username = data.get("user")
+        for roomId, room_data in rooms.items():
+            if username in room_data["users"]:
+                room_data["users"].remove(username)
+                broadcast_room_roster(roomId)
     broadcast_presence()
 
 @socketio.on("leave")
