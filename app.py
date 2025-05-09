@@ -655,7 +655,14 @@ def handle_typing(data):
 
 def broadcast_room_roster(roomId):
     names = rooms[roomId]["users"]
-    socketio.emit("roster_update", {"roomId": roomId, "users": names}, room=roomId)
+    now = time.time()
+    user_list = []
+    for sid, data in user_status.items():
+        if data["user"] in names:
+            state = "online" if now - data.get("last", 0) < 35 else "idle"
+            user_list.append({"user": data["user"], "state": state})
+    socketio.emit("roster_update", {"roomId": roomId, "users": user_list}, room=roomId)
+
 
 @socketio.on("join")
 def handle_join(data):
