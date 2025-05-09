@@ -657,11 +657,14 @@ def broadcast_room_roster(roomId):
     user_sids = rooms[roomId]["users"]
     users_with_status = []
     now = time.time()
+    seen_usernames = set()
     for sid in user_status:
         data = user_status[sid]
-        if data["user"] in user_sids:
+        username = data["user"]
+        if username in user_sids and username not in seen_usernames:
             state = "online" if now - data["last"] < 35 else "idle"
-            users_with_status.append({"user": data["user"], "state": state})
+            users_with_status.append({"user": username, "state": state})
+            seen_usernames.add(username)
     socketio.emit("roster_update", {"roomId": roomId, "users": users_with_status}, room=roomId)
 
 @socketio.on("join")
