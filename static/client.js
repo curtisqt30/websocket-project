@@ -11,13 +11,7 @@ if (!username) {
 }
 
 // Initialize connection
-const socket = io("wss://curtisconnect.secure-tech.org", {
-    path: "/socket.io",
-    transports: ["websocket"],
-    timeout: 40000,            
-    reconnectionAttempts: 20,  
-    reconnectionDelay: 2000    
-});
+const socket = io(window.location.origin, { path: "/socket.io" });
 
 const typingUsers = new Set();
 function renderTypingBanner(){

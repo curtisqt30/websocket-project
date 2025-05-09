@@ -28,8 +28,6 @@ from werkzeug.utils import secure_filename
 app = Flask(__name__)
 
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "fallback-dev-key")
-app.config["SESSION_TYPE"] = "filesystem"
-app.config["SESSION_FILE_DIR"] = os.path.join(os.path.dirname(__file__), "flask_session")
 app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True 
@@ -49,7 +47,6 @@ logging.getLogger("werkzeug").disabled = True
 def silent_404(e):
     return "", 404
 
-Session(app)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
