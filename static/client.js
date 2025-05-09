@@ -11,7 +11,10 @@ if (!username) {
 }
 
 // Initialize connection
-const socket = io(window.location.origin, { path: "/socket.io" });
+const socket = io(window.location.origin, {
+    path: "/socket.io",
+    transports: ["websocket"]
+});
 
 const typingUsers = new Set();
 function renderTypingBanner(){
