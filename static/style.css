@@ -1,6 +1,10 @@
 .app-container,
 .main-content,
 .chat-pane {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
     height: 100%;
 }
 
@@ -57,12 +61,14 @@ input {
 }
 
 .input-area {
-    position: sticky;
     padding: 10px;
     background: #ecf0f1;
     border-top: 1px solid #ccc;
     display: flex;
     flex-direction: column;
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
 }
 
 .input-area textarea {
@@ -152,13 +158,6 @@ p {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
-}
-
-.chat-pane {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
 }
 
 .chat-header {
@@ -299,9 +298,12 @@ p {
 }
 
 .messages {
+    flex: 1;
     overflow-y: auto;
-    max-height: calc(100vh - 240px); 
+    padding: 10px;
     background: #fff;
+    border-top: 1px solid #ddd;
+    border-bottom: 1px solid #ddd;
 }
 
 textarea#messageInput {
@@ -331,6 +333,7 @@ button:focus {
     padding: 10px;
     overflow-y: auto;
     background: #fafafa;
+    height: 100%;
 }
 
 #roomRoster h3 {

@@ -108,8 +108,9 @@ socket.on("roster_update", (data) => {
     rosterEl.innerHTML = "";
     data.users.forEach((user) => {
         const el = document.createElement("div");
-        el.classList.add("user");
-        el.textContent = user;
+        const statusClass = user.state === "online" ? "status-online" : 
+                            user.state === "idle" ? "status-idle" : "status-offline";
+        el.innerHTML = `<span class="status-dot ${statusClass}"></span> ${user.user}`;
         rosterEl.appendChild(el);
     });
 });
