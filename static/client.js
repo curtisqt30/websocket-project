@@ -46,10 +46,9 @@ async function fetchRoomAESKey(roomId) {
             return;
         }
         const privateKeyPEM = sessionStorage.getItem("private_key");
-        const keyPem = privateKeyPEM
-            .replace("-----BEGIN PRIVATE KEY-----", "")
-            .replace("-----END PRIVATE KEY-----", "")
-            .replace(/\s/g, '');
+        const keyPem = privateKeyPEM.replace("-----BEGIN PRIVATE KEY-----", "")
+                                    .replace("-----END PRIVATE KEY-----", "")
+                                    .replace(/\s/g, '');
         const binaryDer = str2ab(atob(keyPem));
         const privateKey = await window.crypto.subtle.importKey(
             "pkcs8",
@@ -65,6 +64,7 @@ async function fetchRoomAESKey(roomId) {
             encryptedKeyBytes
         );
         const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
+        // Store the key correctly
         sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
         console.log(`[INFO] AES key stored for room ${roomId}`);
     } catch (err) {
@@ -80,7 +80,7 @@ socket.on("connect", () => {
     if (roomId) {
         console.log(`Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
-        fetchRoomAESKey(roomId); 
+        fetchRoomAESKey(roomId);
     }
 });
 
@@ -254,6 +254,10 @@ function str2ab(str) {
 
 async function encryptRoomMessage(roomId, plainText) {
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
+    if (!aesKeyBase64) {
+        console.error(`[ERROR] Missing AES key for room ${roomId}`);
+        return null;
+    }
     const aesKey = await crypto.subtle.importKey(
         'raw',
         Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
@@ -449,7 +453,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         filename: data.filename,
                         url: `/uploads/${data.filename}?roomId=${roomId}`
                     });
-                    const encryptedFileMsg = await encryptMessage(fileMessage);
+                    const encryptedFileMsg = await encryptRoomMessage(roomId, fileMessage);
                     socket.emit("message", { user: username, msg: encryptedFileMsg, roomId });
                 } else {
                     alert(data.message);
@@ -662,16 +666,6 @@ window.addEventListener("load", () => {
     if (!sessionStorage.getItem("private_key")) {
         console.log("[DEBUG] Private key not found, fetching again...");
         fetchPrivateKey();
-    }
-    if (!sessionStorage.getItem("aes_key")) {
-        console.log("[DEBUG] AES key not found, requesting again...");
-        fetch("/generate_aes_key", { method: "POST" })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    decryptAESKey(data.encrypted_aes_key);
-                }
-            });
     }
 });
 

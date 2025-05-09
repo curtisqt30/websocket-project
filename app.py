@@ -242,17 +242,9 @@ def decrypt_message(encrypted_message_b64, aes_key, binary=False):
 
 @app.route("/get_private_key", methods=["POST"])
 def get_private_key():
-    try:
-        with open("private_key.pem", "r") as f:
-            private_key = f.read().strip()
-        private_key = "\n".join(line.strip() for line in private_key.strip().splitlines())
-        if not private_key.startswith("-----BEGIN PRIVATE KEY-----") or \
-           not private_key.endswith("-----END PRIVATE KEY-----"):
-            return jsonify({"success": False, "message": "Private key invalid."})
-        return jsonify({"success": True, "private_key": private_key})
-    except Exception as e:
-        print(f"[ERROR] Failed to retrieve private key: {e}")
-        return jsonify({"success": False, "message": "Failed to retrieve private key."})
+    with open("private_key.pem","r") as f:
+        private_key = f.read().strip()
+    return jsonify({"success": True, "private_key": private_key})
 
 # File Uploads/Download Configurations
 UPLOAD_FOLDER = "uploads"
@@ -562,6 +554,8 @@ def join_room_route():
 
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
+    if request.method == "HEAD":
+        return '', 200
     ip = get_client_ip()
     print(f"[INFO] Login page visit from IP: {ip}")
     if is_ip_blocked(ip):
@@ -677,6 +671,7 @@ def handle_message(data):
                     text=encrypted_message)
         db.session.add(msg)
         db.session.commit()
+    user_last_message_time[request.sid] = time.time()
 
 @socketio.on("disconnect")
 def handle_disconnect():
@@ -697,6 +692,9 @@ def handle_leave(data):
         rooms[roomId]["users"].remove(username)
         emit("user_left", {"msg": f"{username} left"}, room=roomId)
         broadcast_room_roster(roomId)     
+        if not rooms[roomId]["users"]:
+            del rooms[roomId]
+            room_aes_keys.pop(roomId, None)
 
 @socketio.on_error_default
 def websocket_error_handler(e):
