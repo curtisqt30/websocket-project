@@ -129,24 +129,14 @@ socket.on("room_invalid", (data) => {
 
 socket.on("presence_update", stateList => {
     const rosterList = document.getElementById("rosterList");
-    rosterList.innerHTML = "";
-
-    stateList.forEach(userData => {
-        const userEl = document.createElement("div");
-        userEl.classList.add("user-status");
-
-        const statusDot = document.createElement("span");
-        statusDot.classList.add("status-dot");
-        statusDot.style.backgroundColor = userData.state === "online" ? "green" : "red";
-
-        const userText = document.createElement("span");
-        userText.textContent = userData.user;
-
-        userEl.appendChild(statusDot);
-        userEl.appendChild(userText);
-        rosterList.appendChild(userEl);
-    });
+    rosterList.innerHTML = stateList.map(u => {
+        let statusClass = "status-offline";
+        if (u.state === "online") statusClass = "status-online";
+        if (u.state === "idle") statusClass = "status-idle";
+        return `<div class="roster-row"><span class="${statusClass} status-dot"></span>${u.user}</div>`;
+    }).join("");
 });
+
 
 // receive updates
 socket.on("typing", ({user, typing}) => {

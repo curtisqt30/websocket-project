@@ -151,6 +151,19 @@ p {
     overflow-y: auto;
 }
 
+.sidebar p a {
+    color: #ecf0f1;
+    font-weight: bold;
+    display: block;
+    margin-top: 10px;
+    text-decoration: none;
+}
+
+.sidebar p a:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
 .main-content {
     flex: 1 1 auto;
     display: flex;
@@ -158,6 +171,14 @@ p {
     max-width: 1200px;
     margin: 0 auto;
     width: 100%;
+}
+
+.sidebar h2,
+.sidebar p a {
+    position: sticky;
+    top: 0;
+    background: #2c3e50;
+    padding-bottom: 8px;
 }
 
 .chat-header {
@@ -192,6 +213,9 @@ p {
     cursor: pointer;
 }
 
+.room-item span {
+    color: #000;  
+}
 .message-input {
     display: flex;
     flex-direction: column;
@@ -304,7 +328,9 @@ p {
     background: #fff;
     border-top: 1px solid #ddd;
     border-bottom: 1px solid #ddd;
+    max-height: calc(100vh - 250px);
 }
+
 
 textarea#messageInput {
     border: 1px solid #ccc;
