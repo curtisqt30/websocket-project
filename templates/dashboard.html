@@ -11,46 +11,43 @@
     <script src="{{ url_for('static', filename='client.js') }}"></script>
 </head>
 <body>
-    <div class="app-layout">
-        <!-- Sidebar -->
-        <aside class="sidebar">
+    <div class="app-container">
+        <div class="sidebar">
             <h2>CurtisConnect</h2>
-            <button id="createRoom">Create a Room</button>
+            <button id="createRoom">Create Room</button>
             <input type="text" id="roomCode" placeholder="Room Code" maxlength="4">
             <button id="joinRoom">Join Room</button>
-            <div id="roomList"></div>
-            <h3>Current Room: <span id="roomId"></span></h3>
+            <div class="room-list" id="roomList"></div>
+            <h3>Current Room: <span id="roomId" style="color: #ffffff;">None</span></h3>
             <button id="leaveRoomButton" class="leave-btn" style="display: none;">🏠 Leave Room</button>
             <p><a href="/logout">Logout</a></p>
-        </aside>
+        </div>
 
-        <!-- Main Area -->
-        <main class="chat-container">
+        <div class="main-chat-area">
             <div class="welcome-panel">
                 <h2>Welcome to CurtisConnect</h2>
-                <p>Please join or create a room to start chatting.</p>
+                <p>Please create or join a room using the sidebar to start chatting.</p>
             </div>
-
             <div class="chat-pane">
                 <div id="messages" class="messages"></div>
                 <div id="typingBanner" class="typing-banner" style="display:none;"></div>
-                <div class="input-area">
-                    <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
-                    <div class="input-actions">
+                <div class="message-input">
+                    <div class="top-actions">
+                        <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
                         <button id="emojiButton">😊 Emoji</button>
-                        <button id="uploadButton">📁 File Upload</button>
-                        <button id="sendButton">Send</button>
+                        <button id="uploadButton">📁 Upload</button>
                     </div>
-                    <div id="charCount">150 characters remaining</div>
+                    <button id="sendButton">Send</button>
                     <div id="emoji-picker-container" style="display:none;"></div>
                 </div>
+                <p id="charCount">150 characters remaining</p>
             </div>
+        </div>
 
-            <div id="roomRoster" class="roster">
-                <h3>In Room</h3>
-                <div id="rosterList"></div>
-            </div>
-        </main>
+        <div id="roomRoster">
+            <h3>In Room</h3>
+            <div id="rosterList"></div>
+        </div>
     </div>
 </body>
 </html>

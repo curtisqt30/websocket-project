@@ -17,9 +17,7 @@ const socket = io(window.location.origin, {
 });
 
 setInterval(() => {
-    if (socket && socket.connected) {
-        socket.emit("heartbeat", { user: username });
-    }
+    socket.emit("heartbeat", { user: username });
 }, 30000);  // every 30 seconds
 
 const typingUsers = new Set();
@@ -90,11 +88,11 @@ socket.on("connect", () => {
     console.log("Socket.IO Connected Successfully");
     if (username) {
         socket.emit("authenticate", { username });
-    }
-    if (roomId && roomId !== "None") {
-        console.log(`Attempting to Join Room: ${roomId}`);
-        socket.emit("join", { roomId });
-        fetchRoomAESKey(roomId);
+        if (roomId && roomId !== "None") {
+            console.log(`Attempting to Join Room: ${roomId}`);
+            socket.emit("join", { roomId });
+            fetchRoomAESKey(roomId);
+        }
     }
 });
 
@@ -344,7 +342,6 @@ socket.on("message", async (data) => {
     }
 });
 
-socket.on("user_joined", (data) => appendMessage(null, data.msg, true));
 socket.on("user_left", (data) => appendMessage(null, data.msg, true));
 
 // Handle WebSocket errors
