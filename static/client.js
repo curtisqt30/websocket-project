@@ -87,7 +87,7 @@ socket.on("connect", () => {
 socket.on("rate_limit", (data) => alert(data.msg));
 
 socket.on("roster_update", (data) => {
-    const rosterEl = document.getElementById("user-roster");
+    const rosterEl = document.getElementById("rosterList");
     if (!rosterEl) return;
     rosterEl.innerHTML = "";
     data.users.forEach((user) => {
