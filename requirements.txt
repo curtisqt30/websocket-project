@@ -4,11 +4,9 @@ Flask-Session
 Flask-Limiter
 Flask-SQLAlchemy
 PyMySQL
-gevent
-gevent-websocket
+eventlet
 bcrypt
 cryptography
 requests
 Werkzeug
 psycopg2-binary
-gunicorn

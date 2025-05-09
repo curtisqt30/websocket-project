@@ -1,4 +1,5 @@
-from gevent import monkey; monkey.patch_all()
+import eventlet
+eventlet.monkey_patch()
 import os
 import hashlib
 import logging
@@ -50,11 +51,10 @@ logging.getLogger("werkzeug").disabled = True
 def silent_404(e):
     return "", 404
 
-Session(app)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode="gevent",
+    async_mode="eventlet",
     path="/socket.io",
     transports=["websocket"],
     ping_timeout=20,
