@@ -271,13 +271,13 @@ if not os.path.exists(LOGS_FOLDER):
     os.makedirs(LOGS_FOLDER)
 
 # --------------------------- Functions ----------------
-@app.after_request
-def set_headers(response):
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self'"
-    return response
+# @app.after_request
+# def set_headers(response):
+#     response.headers["X-Frame-Options"] = "DENY"
+#     response.headers["X-Content-Type-Options"] = "nosniff"
+#     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+#     response.headers["Content-Security-Policy"] = "default-src 'self'"
+#     return response
 
 def verify_captcha(token, remote_ip=None):
     payload = {
@@ -401,7 +401,7 @@ def dashboard_page():
     if not session.get("username"):
         return redirect(url_for("login_page"))
     room_code = request.args.get("roomId", "").strip().upper()
-    if not room_code:
+    if not room_code or (room_code not in rooms and not Room.query.filter_by(room_code=room_code).first()):
         return render_template("dashboard.html", roomId="None")
     return render_template("dashboard.html", roomId=room_code)
 

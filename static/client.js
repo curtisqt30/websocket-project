@@ -50,15 +50,16 @@ socket.on("connect", () => {
 
 socket.on("rate_limit", (data) => alert(data.msg));
 
-socket.on("roster_update", ({roomId: rid, users}) => {
-    if (rid !== roomId) return;
-    const list = document.getElementById("rosterList");
-    list.innerHTML = users.map(u => `
-        <div class="roster-row">
-            <span class="dot"></span>
-            <span>${u === username ? u + " (you)" : u}</span>
-        </div>
-    `).join("");
+socket.on("roster_update", (data) => {
+    const rosterEl = document.getElementById("user-roster");
+    if (!rosterEl) return;
+    rosterEl.innerHTML = "";
+    data.users.forEach((user) => {
+        const el = document.createElement("div");
+        el.classList.add("user");
+        el.textContent = user;
+        rosterEl.appendChild(el);
+    });
 });
 
 socket.on("force_disconnect", (data) => {
@@ -441,7 +442,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const room = urlParams.get("roomId") || "None";
     document.getElementById("roomId").textContent = room;
-    sessionStorage.setItem("room", room);
+    sessionStorage.setItem("room", roomId);
 });
 
 // Function to display username on the sidebar
