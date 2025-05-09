@@ -32,19 +32,55 @@ function renderTypingBanner(){
     banner.textContent = text;
 }
 
+async function fetchRoomAESKey(roomId) {
+    try {
+        const userPublicKey = await getUserPublicKey();
+        const response = await fetch(`/get_room_aes_key/${roomId}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ user_public_key: userPublicKey })
+        });
+        const data = await response.json();
+        if (!data.success) {
+            console.error("[ERROR] Failed to fetch room AES key:", data.message);
+            return;
+        }
+        const privateKeyPEM = sessionStorage.getItem("private_key");
+        const keyPem = privateKeyPEM
+            .replace("-----BEGIN PRIVATE KEY-----", "")
+            .replace("-----END PRIVATE KEY-----", "")
+            .replace(/\s/g, '');
+        const binaryDer = str2ab(atob(keyPem));
+        const privateKey = await window.crypto.subtle.importKey(
+            "pkcs8",
+            binaryDer,
+            { name: "RSA-OAEP", hash: "SHA-256" },
+            false,
+            ["decrypt"]
+        );
+        const encryptedKeyBytes = Uint8Array.from(atob(data.encrypted_room_aes_key), c => c.charCodeAt(0));
+        const decryptedKey = await window.crypto.subtle.decrypt(
+            { name: "RSA-OAEP" },
+            privateKey,
+            encryptedKeyBytes
+        );
+        const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
+        sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
+        console.log(`[INFO] AES key stored for room ${roomId}`);
+    } catch (err) {
+        console.error("[ERROR] fetchRoomAESKey failed:", err);
+    }
+}
+
 socket.on("connect", () => {
     console.log("Socket.IO Connected Successfully");
-
     if (username) {
         socket.emit("authenticate", { username });
-    } else {
-        console.error("No username found in session storage.");
     }
-
     if (roomId) {
         console.log(`Attempting to Join Room: ${roomId}`);
         socket.emit("join", { roomId });
-        fetchRoomAESKey(roomId);
+        fetchRoomAESKey(roomId); 
     }
 });
 
@@ -134,13 +170,29 @@ async function getUserPublicKey() {
 
 async function decryptAESKey(encryptedKeyBase64) {
     try {
-        const aesKeyBytes = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
-        if (![16, 32].includes(aesKeyBytes.length)) {
-            throw new Error(`[AES KEY] Invalid key length: ${aesKeyBytes.length} bytes`);
-        }
-        const aesKeyB64 = btoa(String.fromCharCode(...aesKeyBytes));
-        sessionStorage.setItem("aes_key", aesKeyB64);
-        return aesKeyB64;
+        const privateKeyPEM = sessionStorage.getItem("private_key");
+        if (!privateKeyPEM) throw new Error("Private key not found");
+        const keyPem = privateKeyPEM
+            .replace("-----BEGIN PRIVATE KEY-----", "")
+            .replace("-----END PRIVATE KEY-----", "")
+            .replace(/\s/g, '');
+        const binaryDer = str2ab(atob(keyPem));
+        const privateKey = await window.crypto.subtle.importKey(
+            "pkcs8",
+            binaryDer,
+            { name: "RSA-OAEP", hash: "SHA-256" },
+            false,
+            ["decrypt"]
+        );
+        const encryptedKeyBytes = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
+        const decryptedKey = await window.crypto.subtle.decrypt(
+            { name: "RSA-OAEP" },
+            privateKey,
+            encryptedKeyBytes
+        );
+        const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
+        sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
+        return b64Key;
     } catch (error) {
         console.error("[ERROR] decryptAESKey failed:", error);
         return null;
@@ -193,42 +245,6 @@ async function encryptMessage(plainText) {
     combined.set(iv, 0);
     combined.set(encryptedArray, iv.byteLength);
     return btoa(String.fromCharCode(...combined));
-}
-
-async function decryptAESKey(encryptedKeyBase64) {
-    try {
-        const privateKeyPEM = sessionStorage.getItem("private_key");
-        if (!privateKeyPEM) throw new Error("Private key not found");
-        const keyPem = privateKeyPEM
-            .replace("-----BEGIN PRIVATE KEY-----", "")
-            .replace("-----END PRIVATE KEY-----", "")
-            .replace(/\s/g, '');
-        const binaryDer = str2ab(atob(keyPem)); 
-        const privateKey = await window.crypto.subtle.importKey(
-            "pkcs8",
-            binaryDer,
-            {
-                name: "RSA-OAEP",
-                hash: "SHA-256"
-            },
-            false,
-            ["decrypt"]
-        );
-        const encryptedKeyBytes = Uint8Array.from(atob(encryptedKeyBase64), c => c.charCodeAt(0));
-        const decryptedKey = await window.crypto.subtle.decrypt(
-            {
-                name: "RSA-OAEP"
-            },
-            privateKey,
-            encryptedKeyBytes
-        );
-        const b64Key = btoa(String.fromCharCode(...new Uint8Array(decryptedKey)));
-        sessionStorage.setItem(`room_aes_key_${roomId}`, b64Key);
-        return b64Key;
-    } catch (error) {
-        console.error("[ERROR] decryptAESKey failed:", error);
-        return null;
-    }
 }
 
 function str2ab(str) {
