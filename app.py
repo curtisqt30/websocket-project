@@ -8,6 +8,7 @@ import random
 import string
 import base64
 import datetime
+import ssl
 from datetime import datetime as dt_cls
 from threading import Thread
 from flask import (
@@ -73,6 +74,10 @@ with app.app_context():
     if os.environ.get("INIT_DB", "false") == "true":
         print("[INFO] Creating database tables...")
         db.create_all()
+    existing_rooms = Room.query.all()
+    for room in existing_rooms:
+        rooms[room.room_code] = {"users": []}
+    print(f"[INFO] Loaded {len(rooms)} rooms into memory.")
 
 # Models
 class User(db.Model):
@@ -287,7 +292,7 @@ def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def broadcast_presence():
-    socketio.emit("presence_update", list(user_status.values()), broadcast=True)
+    socketio.emit("presence_update", list(user_status.values()), to=None)
 
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATTEMPTS = 3
