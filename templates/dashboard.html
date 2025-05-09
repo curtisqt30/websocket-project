@@ -46,9 +46,14 @@
             <div class="chat-header"></div>
               
             <div class="chat-pane">
-
+                <div id="messages">
+                    <p style="color: gray; font-style: italic; text-align:center; margin-top:20px;">
+                        You're currently not in a chatroom. Create or join a room using the sidebar.
+                    </p>
+                </div>
+            
                 <div id="typingBanner" class="typing-banner" style="display:none;font-style:italic;margin:4px 8px;"></div>
-
+            
                 <div class="message-input">
                     <div class="top-actions">
                         <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
@@ -58,7 +63,7 @@
                     <button id="sendButton">Send</button>
                     <div id="emoji-picker-container" style="display:none;"></div>
                 </div>
-
+            
                 <p id="charCount">150 characters remaining</p>
             </div>
             
