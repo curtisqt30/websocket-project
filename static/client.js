@@ -91,34 +91,24 @@ async function fetchRoomAESKey(roomId) {
 }
 
 socket.on("connect", () => {
-    console.log("Socket.IO Connected Successfully");
-    if (username) {
-        socket.emit("authenticate", { username });
-        if (roomId && roomId !== "None") {
-            console.log(`Joining room: ${roomId}`);
-            socket.emit("join", { roomId });
-            fetchRoomAESKey(roomId);
-            setTimeout(() => {
-                updateChatPanelVisibility(
-                    document.querySelector(".welcome-panel"),
-                    document.querySelector(".chat-pane")
-                );
-            }, 500);
-        } else {
-            updateChatPanelVisibility(
-                document.querySelector(".welcome-panel"),
-                document.querySelector(".chat-pane")
-            );
-        }
+    socket.emit("authenticate", { username });
+    if (roomId && roomId !== "None") {
+        socket.emit("join", { roomId });
+        fetchRoomAESKey(roomId);
     }
+    updateChatPanelVisibility();
 });
 
-function updateChatPanelVisibility(welcomePanel, chatPane) {
+document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
+
+function updateChatPanelVisibility() {
+    const welcomePanel = document.querySelector(".welcome-panel");
+    const chatPane = document.querySelector(".chat-pane");
     const rosterList = document.getElementById("rosterList");
     const currentRoom = sessionStorage.getItem("room");
     if (currentRoom && currentRoom !== "None") {
         welcomePanel.style.display = "none";
-        chatPane.style.display = "block";
+        chatPane.style.display = "flex"; 
     } else {
         welcomePanel.style.display = "block";
         chatPane.style.display = "none";
@@ -142,19 +132,13 @@ socket.on("user_joined", (data) => {
 socket.on("rate_limit", (data) => alert(data.msg));
 
 socket.on("roster_update", (data) => {
-const rosterEl = document.getElementById("rosterList");
-    if (!rosterEl) { return; }
-    rosterEl.innerHTML = "";
-    if (!data.users || data.users.length === 0) {
-        rosterEl.innerHTML = "<p>No users in room.</p>";
-        return;
-    }
-    rosterEl.innerHTML = "";
+    const rosterEl = document.getElementById("rosterList");
     rosterEl.innerHTML = data.users.map(userObj => {
         const statusClass = userObj.state === "online" ? "status-online" :
                             userObj.state === "idle" ? "status-idle" : "status-offline";
+        const selfTag = userObj.user === username ? " (You)" : "";
         return `<div class="roster-row">
-                    <span class="status-dot ${statusClass}"></span> ${userObj.user}
+                    <span class="status-dot ${statusClass}"></span> ${userObj.user}${selfTag}
                 </div>`;
     }).join('');
 });
@@ -426,7 +410,7 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
         leaveRoomButton.style.display = "none";
     }
-    
+
     const uploadButton = document.getElementById("uploadButton");
 
     // Display message for no chatroom
