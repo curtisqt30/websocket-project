@@ -1,18 +1,13 @@
 // Get username from sessionStorage
 const username = sessionStorage.getItem("username");
 const urlParams = new URLSearchParams(window.location.search);
-const roomId = urlParams.get('roomId');
-
-if (!roomId || roomId === "None") {
-    sessionStorage.removeItem("room");
-} else {
-    sessionStorage.setItem("room", roomId);
-}
+let roomId = urlParams.get('roomId') || sessionStorage.getItem('room') || "None";
+sessionStorage.setItem("room", roomId);
 
 // Redirect to login if no username
 if (!username) {
     window.location.href = "/login";
-} else if (!roomId && !window.location.pathname.includes("/dashboard")) {
+} else if (roomId === "None" && !window.location.pathname.includes("/dashboard")) {
     window.location.href = "/dashboard";
 }
 
@@ -91,43 +86,51 @@ async function fetchRoomAESKey(roomId) {
 }
 
 socket.on("connect", () => {
-    socket.emit("authenticate", { username });
-    if (roomId && roomId !== "None") {
-        socket.emit("join", { roomId });
-        fetchRoomAESKey(roomId);
+    console.log("Socket.IO Connected Successfully");
+    if (username) {
+        socket.emit("authenticate", { username });
+        if (roomId && roomId !== "None") {
+            console.log(`Attempting to Join Room: ${roomId}`);
+            socket.emit("join", { roomId });
+            fetchRoomAESKey(roomId);
+        }
     }
     updateChatPanelVisibility();
 });
 
 function updateChatPanelVisibility() {
-    const welcomePanel = document.getElementById("welcomePanel");
-    const chatPane = document.getElementById("chatPane");
-    const messageInput = document.getElementById("messageInput");
-    const sendButton = document.getElementById("sendButton");
-    const currentRoom = sessionStorage.getItem("room") || "None";
+    const welcomePanel = document.querySelector(".welcome-panel");
+    const chatPane = document.querySelector(".chat-pane");
+    const currentRoom = sessionStorage.getItem("room");
 
-    if (currentRoom !== "None") {
-        welcomePanel.style.display = "none";
-        chatPane.style.display = "flex";
-        messageInput.disabled = false;
-        sendButton.disabled = false;
+    if (!currentRoom || currentRoom === "None") {
+        console.log("[INFO] No active room, showing welcome panel");
+        if (welcomePanel) welcomePanel.style.display = "flex";
+        if (chatPane) chatPane.style.display = "none";
     } else {
-        welcomePanel.style.display = "block";
-        chatPane.style.display = "flex"; // Keep it visible, just disabled
-        messageInput.disabled = true;
-        sendButton.disabled = true;
-        document.getElementById("rosterList").innerHTML = "<p>No users in room.</p>";
+        console.log("[INFO] Active room detected, showing chat panel");
+        if (welcomePanel) welcomePanel.style.display = "none";
+        if (chatPane) chatPane.style.display = "flex";
     }
 }
 
 // Trigger at load and on room join/leave
-document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
-socket.on("connect", updateChatPanelVisibility);
-socket.on("user_joined", updateChatPanelVisibility);
-socket.on("user_left", updateChatPanelVisibility);
+document.addEventListener("DOMContentLoaded", () => {
+    updateChatPanelVisibility();
+});
 
+// Ensure visibility updates on URL changes
+window.addEventListener("popstate", updateChatPanelVisibility);
+
+function updateLeaveButtonVisibility() {
+    const leaveRoomButton = document.getElementById("leaveRoomButton");
+    const currentRoom = sessionStorage.getItem("room") || "None";
+    leaveRoomButton.style.display = currentRoom === "None" ? "none" : "block";
+}
 
 socket.on("user_joined", (data) => {
+    console.log(data.msg);
+    updateChatPanelVisibility();
     appendMessage(null, data.msg, true);
 });
 
@@ -427,10 +430,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const uploadButton = document.getElementById("uploadButton");
 
     // Display message for no chatroom
-    const welcomePanel = document.querySelector(".welcome-panel");
-    const chatPane = document.querySelector(".chat-pane");
-
-    updateChatPanelVisibility(welcomePanel, chatPane);
+    updateChatPanelVisibility();
 
     if (leaveRoomButton) {
         if (roomId && roomId !== "None") {
@@ -528,10 +528,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
         fileInput.click();
     });
-
-    const room = urlParams.get("roomId") || "None";
-    document.getElementById("roomId").textContent = room;
-    sessionStorage.setItem("room", roomId);
 });
 
 // Function to display username on the sidebar

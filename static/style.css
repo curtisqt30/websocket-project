@@ -85,7 +85,9 @@ body, html {
     margin: auto;
     text-align: center;
     color: #555;
-    display: none;
+    display: flex; 
+    justify-content: center;
+    align-items: center;
 }
 
 /* CHAT PANE */
