@@ -303,6 +303,46 @@ async function encryptMessage(plainText) {
     return btoa(String.fromCharCode(...combined));
 }
 
+async function uploadEncryptedFileToFirebase(file, roomId) {
+    const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
+    if (!aesKeyBase64) {
+        alert("Room key not found.");
+        return;
+    }
+    const aesKey = await crypto.subtle.importKey(
+        'raw',
+        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+    );
+    const fileBuffer = await file.arrayBuffer();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encryptedBuffer = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        aesKey,
+        fileBuffer
+    );
+    const combinedBuffer = new Uint8Array(iv.byteLength + encryptedBuffer.byteLength);
+    combinedBuffer.set(iv, 0);
+    combinedBuffer.set(new Uint8Array(encryptedBuffer), iv.byteLength);
+    const storageRef = firebaseStorage && firebaseStorage.constructor.name === "Storage"
+        ? firebaseStorage
+        : (window.firebaseStorage || window.storage);
+
+    const fileRef = firebaseStorageRef(storageRef, `${roomId}/${file.name}.enc`);
+    await uploadBytes(fileRef, combinedBuffer);
+    const downloadURL = await getDownloadURL(fileRef);
+    const fileMessage = JSON.stringify({
+        type: 'file',
+        filename: file.name,
+        url: downloadURL
+    });
+    const encryptedFileMsg = await encryptRoomMessage(roomId, fileMessage);
+    socket.emit("message", { user: username, msg: encryptedFileMsg, roomId });
+}
+
+
 function str2ab(str) {
     const buf = new ArrayBuffer(str.length);
     const bufView = new Uint8Array(buf);
@@ -500,29 +540,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 alert("File size exceeds 8MB.");
                 return;
             }
-            const formData = new FormData();
-            formData.append("file", file);
-            formData.append("roomId", roomId);
-            try {
-                const response = await fetch("/upload", {
-                    method: "POST",
-                    body: formData,
-                });
-                const data = await response.json();
-                if (data.success) {
-                    const fileMessage = JSON.stringify({
-                        type: 'file',
-                        filename: data.filename,
-                        url: `/uploads/${data.filename}?roomId=${roomId}`
-                    });
-                    const encryptedFileMsg = await encryptRoomMessage(roomId, fileMessage);
-                    socket.emit("message", { user: username, msg: encryptedFileMsg, roomId });
-                } else {
-                    alert(data.message);
-                }
-            } catch (error) {
-                console.error("[ERROR] Upload failed:", error);
-            }
+            await uploadEncryptedFileToFirebase(file, roomId);
         });
         fileInput.click();
     });
@@ -583,38 +601,41 @@ function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
 
 
 async function appendFileMessage(user, msgObject) {
-    const messages = document.getElementById("messages");
-    const messageElement = document.createElement("div");
-    const timestamp = new Date().toLocaleTimeString();
+    const response = await fetch(msgObject.url);
+    const encryptedBuffer = await response.arrayBuffer();
+    const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
+    if (!aesKeyBase64) {
+        console.error("Missing AES Key");
+        return;
+    }
+    const aesKey = await crypto.subtle.importKey(
+        'raw',
+        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+    );
+    const encryptedArray = new Uint8Array(encryptedBuffer);
+    const iv = encryptedArray.slice(0, 12);
+    const ciphertext = encryptedArray.slice(12);
     try {
-        const response = await fetch(`/download/${msgObject.filename}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ roomId })
-        });
-        if (!response.ok) {
-            throw new Error("Failed to download file.");
-        }
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        let fileContent;
-        if (/\.(jpg|jpeg|png|gif)$/i.test(msgObject.filename)) {
-            fileContent = `<img src="${objectUrl}" alt="${msgObject.filename}" style="max-width:300px; border:1px solid #ccc;">`;
-        } else {
-            fileContent = `<a href="${objectUrl}" target="_blank">${msgObject.filename}</a>`;
-        }
-        messageElement.innerHTML = `<div>
-            <strong>[${timestamp}] ${user}:</strong>
-            <span>${fileContent}</span>
-        </div>`;
-        messages.appendChild(messageElement);
-        messages.scrollTop = messages.scrollHeight;
+        const decryptedBuffer = await crypto.subtle.decrypt(
+            { name: 'AES-GCM', iv },
+            aesKey,
+            ciphertext
+        );
+        const blob = new Blob([decryptedBuffer]);
+        const url = URL.createObjectURL(blob);
+        const messageElement = document.createElement("div");
+        const timestamp = new Date().toLocaleTimeString();
+        const fileContent = `<a href="${url}" download="${msgObject.filename}">${msgObject.filename}</a>`;
+        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <span>${fileContent}</span></div>`;
+        document.getElementById("messages").appendChild(messageElement);
     } catch (error) {
-        console.error("[ERROR] File display failed:", error);
-        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <em>Failed to load file</em></div>`;
-        messages.appendChild(messageElement);
+        console.error("[ERROR] Decryption failed:", error);
     }
 }
+
 
 // Function to add room to sidebar
 function addRoomToSidebar(roomId) {
