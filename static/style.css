@@ -85,9 +85,15 @@ body, html {
     margin: auto;
     text-align: center;
     color: #555;
-    display: flex; 
-    justify-content: center;
-    align-items: center;
+    display: block;
+    padding: 40px;
+}
+
+.welcome-panel p {
+    display: block;
+    margin-top: 10px;
+    font-size: 1rem;
+    color: #666;
 }
 
 /* CHAT PANE */
