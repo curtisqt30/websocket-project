@@ -305,7 +305,7 @@ async function encryptMessage(plainText) {
     return btoa(String.fromCharCode(...combined));
 }
 
-async function uploadEncryptedFileToFirebase(file, roomId) {
+async function uploadEncryptedFileToServer(file, roomId) {
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
     if (!aesKeyBase64) {
         alert("Room key not found.");
@@ -328,22 +328,21 @@ async function uploadEncryptedFileToFirebase(file, roomId) {
     const combinedBuffer = new Uint8Array(iv.byteLength + encryptedBuffer.byteLength);
     combinedBuffer.set(iv, 0);
     combinedBuffer.set(new Uint8Array(encryptedBuffer), iv.byteLength);
-    const storageRef = firebaseStorage && firebaseStorage.constructor.name === "Storage"
-        ? firebaseStorage
-        : (window.firebaseStorage || window.storage);
-
-    const fileRef = window.firebaseRef(storageRef, `${roomId}/${file.name}.enc`);
-    await window.firebaseUploadBytes(fileRef, combinedBuffer);
-    const downloadURL = await window.firebaseGetDownloadURL(fileRef);
-    const fileMessage = JSON.stringify({
-        type: 'file',
-        filename: file.name,
-        url: downloadURL
+    const formData = new FormData();
+    const encryptedBlob = new Blob([combinedBuffer]);
+    formData.append('file', encryptedBlob, file.name);
+    formData.append('roomId', roomId);
+    const response = await fetch('/upload', {
+        method: 'POST',
+        body: formData
     });
-    const encryptedFileMsg = await encryptRoomMessage(roomId, fileMessage);
-    socket.emit("message", { user: username, msg: encryptedFileMsg, roomId });
+    const result = await response.json();
+    if (result.success) {
+        alert(`File uploaded successfully: ${result.filename}`);
+    } else {
+        alert(`Upload failed: ${result.message}`);
+    }
 }
-
 
 function str2ab(str) {
     const buf = new ArrayBuffer(str.length);
@@ -542,7 +541,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 alert("File size exceeds 8MB.");
                 return;
             }
-            await uploadEncryptedFileToFirebase(file, roomId);
+            await uploadEncryptedFileToServer(file, roomId);  // ✅ Now uses server route
         });
         fileInput.click();
     });

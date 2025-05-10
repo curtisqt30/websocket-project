@@ -25,6 +25,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from werkzeug.utils import secure_filename
+from google.cloud import storage
+
 
 # Flask App Config
 app = Flask(__name__)
@@ -39,6 +41,9 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax" 
 SECURE_FOLDER = "/tmp/secure"
 os.makedirs(SECURE_FOLDER, exist_ok=True)
+
+storage_client = storage.Client()
+bucket = storage_client.bucket("curtisconnect-a1630.appspot.com")
 
 # Remove default Flask log handlers and quiet gevent/socketio
 for h in list(app.logger.handlers):
@@ -450,26 +455,25 @@ def upload_file():
     print(f"[DEBUG] AES Key for upload {room_id}: {base64.b64encode(aes_key).decode()}")
     if file:
         filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file_data = file.read()
         encrypted_data = encrypt_message(file_data, aes_key)
-        # WRITE IN BINARY MODE
-        with open(filepath, "wb") as f:
-            f.write(encrypted_data.encode('utf-8'))
+        blob = bucket.blob(f"{room_id}/{filename}.enc")
+        blob.upload_from_string(encrypted_data)
         return jsonify({"success": True, "filename": filename}), 200
     return jsonify({"success": False, "message": "Something went wrong"}), 500
 
 @app.route("/download/<filename>", methods=["POST"])
 def download_file(filename):
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     room_id = request.json.get("roomId")
     aes_key = room_aes_keys.get(room_id)
     if not aes_key:
         print(f"[ERROR] No AES key found for room {room_id}")
         return jsonify({"success": False, "message": "Room AES key missing"}), 400
     print(f"[DEBUG] AES Key for download {room_id}: {base64.b64encode(aes_key).decode()}")
-    with open(file_path, "rb") as f:
-        encrypted_data_b64 = f.read().decode('utf-8')
+    blob = bucket.blob(f"{room_id}/{filename}.enc")
+    if not blob.exists():
+        return jsonify({"success": False, "message": "File not found"}), 404
+    encrypted_data_b64 = blob.download_as_text()
     decrypted_data = decrypt_message(encrypted_data_b64, aes_key, binary=True)
     mime_type = "image/jpeg" if filename.lower().endswith(".jpg") else "image/png"
     response = make_response(decrypted_data)

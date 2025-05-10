@@ -10,3 +10,4 @@ cryptography
 requests
 Werkzeug
 psycopg2-binary
+google-cloud-storage
