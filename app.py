@@ -26,7 +26,8 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from werkzeug.utils import secure_filename
 from google.cloud import storage
-
+import json
+from google.oauth2 import service_account
 
 # Flask App Config
 app = Flask(__name__)
@@ -42,7 +43,12 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 SECURE_FOLDER = "/tmp/secure"
 os.makedirs(SECURE_FOLDER, exist_ok=True)
 
-storage_client = storage.Client()
+# Load service account credentials from environment variable
+creds_info = json.loads(os.environ['GOOGLE_APPLICATION_CREDENTIALS_JSON'])
+credentials = service_account.Credentials.from_service_account_info(creds_info)
+
+# Initialize storage client with loaded credentials
+storage_client = storage.Client(credentials=credentials, project=creds_info['project_id'])
 bucket = storage_client.bucket("curtisconnect-a1630.appspot.com")
 
 # Remove default Flask log handlers and quiet gevent/socketio
