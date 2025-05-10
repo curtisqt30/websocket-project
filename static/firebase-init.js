@@ -13,4 +13,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const storage = getStorage(app);
+
 window.firebaseStorage = storage;
+window.firebaseRef = ref;
+window.firebaseUploadBytes = uploadBytes;
+window.firebaseGetDownloadURL = getDownloadURL;

@@ -330,9 +330,9 @@ async function uploadEncryptedFileToFirebase(file, roomId) {
         ? firebaseStorage
         : (window.firebaseStorage || window.storage);
 
-    const fileRef = firebaseStorageRef(storageRef, `${roomId}/${file.name}.enc`);
-    await uploadBytes(fileRef, combinedBuffer);
-    const downloadURL = await getDownloadURL(fileRef);
+    const fileRef = window.firebaseRef(storageRef, `${roomId}/${file.name}.enc`);
+    await window.firebaseUploadBytes(fileRef, combinedBuffer);
+    const downloadURL = await window.firebaseGetDownloadURL(fileRef);
     const fileMessage = JSON.stringify({
         type: 'file',
         filename: file.name,
