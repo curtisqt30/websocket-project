@@ -101,20 +101,24 @@ socket.on("connect", () => {
         if (roomId && roomId !== "None") {
             console.log(`Attempting to Join Room: ${roomId}`);
             socket.emit("join", { roomId });
-            fetchRoomAESKey(roomId);
+            setTimeout(() => {
+                updateChatPanelVisibility(
+                    document.querySelector(".welcome-panel"),
+                    document.querySelector(".chat-pane")
+                );
+            }, 1000);
         }
     }
 });
 
 function updateChatPanelVisibility(welcomePanel, chatPane) {
-    const roomIdParam = urlParams.get('roomId');
-    if (!roomIdParam || roomIdParam === "None") {
+    if (socket.connected && roomId && roomId !== "None") {
+        if (welcomePanel) welcomePanel.style.display = "none";
+        if (chatPane) chatPane.style.display = "block";
+    } else {
         if (welcomePanel) welcomePanel.style.display = "block";
         if (chatPane) chatPane.style.display = "none";
         document.getElementById("rosterList").innerHTML = "";
-    } else {
-        if (welcomePanel) welcomePanel.style.display = "none";
-        if (chatPane) chatPane.style.display = "block";
     }
 }
 

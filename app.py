@@ -654,32 +654,29 @@ def handle_typing(data):
         emit("typing", data, room=room_id, include_self=False)
 
 def broadcast_room_roster(roomId):
-    user_sids = rooms[roomId]["users"]
-    users_with_status = []
-    now = time.time()
-    seen_users = set()
-    for sid in user_status:
-        data = user_status[sid]
-        if data["user"] in user_sids and data["user"] not in seen_users:
-            state = "online" if now - data["last"] < 35 else "idle"
-            users_with_status.append({"user": data["user"], "state": state})
-            seen_users.add(data["user"])
-    socketio.emit("roster_update", {"roomId": roomId, "users": users_with_status}, room=roomId)
+    if roomId in rooms:
+        users_with_status = []
+        now = time.time()
+        for sid, username in rooms[roomId]["users"].items():
+            state = "online" if sid in user_status and now - user_status[sid]["last"] < 35 else "idle"
+            users_with_status.append({"user": username, "state": state})
+        socketio.emit("roster_update", {"roomId": roomId, "users": users_with_status}, room=roomId)
 
 @socketio.on("join")
 def handle_join(data):
     roomId = data.get("roomId", "").strip().upper()
     username = session.get("username", "Guest")
-    if roomId in rooms:
-        join_room(roomId)
-        if username in rooms[roomId]["users"]:
-            rooms[roomId]["users"].remove(username)
-        rooms[roomId]["users"].append(username)
-        emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
-        session["room"] = roomId
-        broadcast_room_roster(roomId)
-    else:
-        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
+    if roomId not in rooms:
+        rooms[roomId] = {"users": {}}
+    join_room(roomId)
+    stale_sids = [sid for sid, name in rooms[roomId]["users"].items() if name == username]
+    for sid in stale_sids:
+        del rooms[roomId]["users"][sid]
+
+    rooms[roomId]["users"][request.sid] = username
+    emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
+    session["room"] = roomId
+    broadcast_room_roster(roomId)
 
 @socketio.on("message")
 def handle_message(data):
@@ -703,33 +700,26 @@ def handle_message(data):
 
 @socketio.on("disconnect")
 def handle_disconnect():
-    data = user_status.pop(request.sid, None)
-    if data:
-        username = data.get("user")
-        for roomId, room_data in rooms.items():
-            if username in room_data["users"]:
-                room_data["users"].remove(username)
-                emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
-                broadcast_room_roster(roomId)
-                if not room_data["users"]:
-                    del rooms[roomId]
-                    room_aes_keys.pop(roomId, None)
+    for roomId, room_data in rooms.items():
+        if request.sid in room_data["users"]:
+            username = room_data["users"].pop(request.sid)
+            emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
+            broadcast_room_roster(roomId)
+            if not room_data["users"]:
+                del rooms[roomId]
+                room_aes_keys.pop(roomId, None)
     broadcast_presence()
 
-@socketio.on("disconnect")
-def handle_disconnect():
-    data = user_status.pop(request.sid, None)
-    if data:
-        username = data.get("user")
-        for roomId, room_data in rooms.items():
-            if username in room_data["users"]:
-                room_data["users"].remove(username)
-                emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
-                broadcast_room_roster(roomId)
-                if not room_data["users"]:
-                    del rooms[roomId]
-                    room_aes_keys.pop(roomId, None)
-    broadcast_presence()
+@socketio.on("leave")
+def handle_leave(data):
+    roomId = data.get("roomId", "").strip().upper()
+    if roomId in rooms and request.sid in rooms[roomId]["users"]:
+        username = rooms[roomId]["users"].pop(request.sid)
+        emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
+        broadcast_room_roster(roomId)
+        if not rooms[roomId]["users"]:
+            del rooms[roomId]
+            room_aes_keys.pop(roomId, None)
 
 @socketio.on_error_default
 def websocket_error_handler(e):
@@ -765,4 +755,3 @@ def ping():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     socketio.run(app, host="0.0.0.0", port=port)
-
