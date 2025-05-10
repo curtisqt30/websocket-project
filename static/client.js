@@ -95,7 +95,6 @@ socket.on("connect", () => {
             fetchRoomAESKey(roomId);
         }
     }
-    updateChatPanelVisibility();
 });
 
 function updateChatPanelVisibility() {
@@ -130,7 +129,6 @@ function updateLeaveButtonVisibility() {
 
 socket.on("user_joined", (data) => {
     console.log(data.msg);
-    updateChatPanelVisibility();
     appendMessage(null, data.msg, true);
 });
 
