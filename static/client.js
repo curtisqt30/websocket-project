@@ -393,6 +393,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!roomId || roomId === "None") {
         if (welcomePanel) welcomePanel.style.display = "block";
         if (chatPane) chatPane.style.display = "none";
+        document.getElementById("rosterList").innerHTML = "";
     } else {
         if (welcomePanel) welcomePanel.style.display = "none";
         if (chatPane) chatPane.style.display = "block";
@@ -400,12 +401,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Leave room button functionality
     if (leaveRoomButton) {
+        leaveRoomButton.style.display = "block"; 
         leaveRoomButton.addEventListener("click", () => {
             socket.emit("leave", { user: username, roomId: roomId });
-            sessionStorage.removeItem("room"); 
-            window.location.href = "/dashboard";
-            typingUsers.clear();
-            renderTypingBanner();
+            sessionStorage.removeItem("room");
+            window.location.href = "/dashboard"; 
         });
     }
 

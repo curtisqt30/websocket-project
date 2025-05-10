@@ -654,6 +654,8 @@ def handle_typing(data):
         emit("typing", data, room=room_id, include_self=False)
 
 def broadcast_room_roster(roomId):
+    if roomId == "None" or roomId not in rooms:
+        return 
     user_sids = rooms[roomId]["users"]
     users_with_status = []
     now = time.time()
