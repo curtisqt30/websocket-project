@@ -309,13 +309,13 @@ def allowed_file(filename):
 
 def broadcast_presence():
     now = time.time()
-    updated_status = []
-    for sid, data in user_status.items():
-        username = data.get("user")
-        last_seen = data.get("last", 0)
-        state = "online" if now - last_seen < 35 else "idle"
-        updated_status.append({"user": username, "state": state})
-    socketio.emit("presence_update", updated_status, to=None)
+    for roomId, room_data in rooms.items():
+        updated_status = []
+        for sid, username in room_data["users"].items():
+            last_seen = user_status.get(sid, {}).get("last", 0)
+            state = "online" if now - last_seen < 35 else "idle"
+            updated_status.append({"user": username, "state": state})
+        socketio.emit("presence_update", updated_status, room=roomId)
 
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATTEMPTS = 3

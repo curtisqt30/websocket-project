@@ -112,13 +112,14 @@ socket.on("connect", () => {
 });
 
 function updateChatPanelVisibility(welcomePanel, chatPane) {
+    const rosterList = document.getElementById("rosterList");
     if (socket.connected && roomId && roomId !== "None") {
         if (welcomePanel) welcomePanel.style.display = "none";
         if (chatPane) chatPane.style.display = "block";
     } else {
         if (welcomePanel) welcomePanel.style.display = "block";
         if (chatPane) chatPane.style.display = "none";
-        document.getElementById("rosterList").innerHTML = "";
+        if (rosterList) rosterList.innerHTML = "";
     }
 }
 
