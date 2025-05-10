@@ -3,6 +3,10 @@ const username = sessionStorage.getItem("username");
 const urlParams = new URLSearchParams(window.location.search);
 const roomId = urlParams.get('roomId');
 
+if (!roomId || roomId === "None") {
+    sessionStorage.removeItem("room");
+}
+
 // Redirect to login if no username
 if (!username) {
     window.location.href = "/login";
@@ -88,6 +92,10 @@ socket.on("connect", () => {
     console.log("Socket.IO Connected Successfully");
     if (username) {
         socket.emit("authenticate", { username });
+        updateChatPanelVisibility(
+            document.querySelector(".welcome-panel"),
+            document.querySelector(".chat-pane")
+        );
         if (roomId && roomId !== "None") {
             console.log(`Attempting to Join Room: ${roomId}`);
             socket.emit("join", { roomId });
@@ -97,8 +105,8 @@ socket.on("connect", () => {
 });
 
 function updateChatPanelVisibility(welcomePanel, chatPane) {
-    const roomIdStored = sessionStorage.getItem("room");
-    if (!roomIdStored || roomIdStored === "None") {
+    const roomIdParam = urlParams.get('roomId');
+    if (!roomIdParam || roomIdParam === "None") {
         if (welcomePanel) welcomePanel.style.display = "block";
         if (chatPane) chatPane.style.display = "none";
         document.getElementById("rosterList").innerHTML = "";
@@ -690,7 +698,6 @@ function setupEmojiPicker() {
     });
 }
 
-// Ensure keys are fetched and stored securely
 fetch("/get_private_key", { method: "POST" })
     .then(response => response.json())
     .then(data => {
@@ -703,11 +710,16 @@ fetch("/get_private_key", { method: "POST" })
     })
     .catch(error => console.error("[ERROR] Failed to fetch private key:", error));
 
-// Clear stale keys on refresh
 window.addEventListener("load", () => {
     if (!sessionStorage.getItem("private_key")) {
         console.log("[DEBUG] Private key not found, fetching again...");
         fetchPrivateKey();
+    }
+});
+
+window.addEventListener("beforeunload", () => {
+    if (roomId && roomId !== "None") {
+        socket.emit("leave", { user: username, roomId });
     }
 });
 

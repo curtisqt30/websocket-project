@@ -672,8 +672,10 @@ def handle_join(data):
     username = session.get("username", "Guest")
     if roomId in rooms:
         join_room(roomId)
-        if username not in rooms[roomId]["users"]:
-            rooms[roomId]["users"].append(username)
+        if username in rooms[roomId]["users"]:
+            rooms[roomId]["users"].remove(username)
+        rooms[roomId]["users"].append(username)
+
         emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
         session["room"] = roomId
         broadcast_room_roster(roomId)
@@ -708,17 +710,21 @@ def handle_disconnect():
         for roomId, room_data in rooms.items():
             if username in room_data["users"]:
                 room_data["users"].remove(username)
+                emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
                 broadcast_room_roster(roomId)
+                if not room_data["users"]:
+                    del rooms[roomId]
+                    room_aes_keys.pop(roomId, None)
     broadcast_presence()
 
 @socketio.on("leave")
 def handle_leave(data):
     username = data.get("user", "Guest")
-    roomId   = data.get("roomId", "").strip().upper()
+    roomId = data.get("roomId", "").strip().upper()
     if roomId in rooms and username in rooms[roomId]["users"]:
         rooms[roomId]["users"].remove(username)
-        emit("user_left", {"msg": f"{username} left"}, room=roomId)
-        broadcast_room_roster(roomId)     
+        emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
+        broadcast_room_roster(roomId)
         if not rooms[roomId]["users"]:
             del rooms[roomId]
             room_aes_keys.pop(roomId, None)
