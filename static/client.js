@@ -128,13 +128,15 @@ function updateLeaveButtonVisibility() {
 }
 
 socket.on("user_joined", (data) => {
-    console.log(data.msg);
-    appendMessage(null, data.msg, true);
+    const notice = `${data.user} joined the room.`;
+    appendMessage(null, notice, true);
 });
 
 socket.on("user_left", (data) => {
-    appendMessage(null, data.msg, true);
+    const notice = `${data.user} left the room.`;
+    appendMessage(null, notice, true);
 });
+
 socket.on("rate_limit", (data) => alert(data.msg));
 
 socket.on("roster_update", (data) => {
