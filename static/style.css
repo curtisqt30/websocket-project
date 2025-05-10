@@ -181,7 +181,6 @@ body, html {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 4px;
     font-size: 0.92rem;
 }
 
@@ -236,7 +235,7 @@ body, html {
 }
 
 .panel {
-    background: #ffffff;
+    background: #fafafa;
     padding: 30px;
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);

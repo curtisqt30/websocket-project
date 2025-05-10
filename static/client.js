@@ -115,6 +115,7 @@ function updateChatPanelVisibility() {
         rosterList.innerHTML = "<p>No users in room.</p>";
     }
 }
+
 document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
 socket.on("connect", updateChatPanelVisibility);
 
@@ -139,7 +140,9 @@ socket.on("roster_update", (data) => {
         const statusClass = userObj.state === "online" ? "status-online" :
                             userObj.state === "idle" ? "status-idle" : "status-offline";
         const selfTag = userObj.user === username ? " (You)" : "";
-        return `<div class="roster-row"><span class="status-dot ${statusClass}"></span> ${userObj.user}${selfTag}</div>`;
+        return `<div class="roster-row">
+                    <span class="status-dot ${statusClass}"></span>${userObj.user}${selfTag}
+                </div>`;
     }).join('');
 });
 
@@ -549,6 +552,8 @@ function loadRooms() {
 }
 
 socket.on("chat_history", async (messages) => {
+    const messagesContainer = document.getElementById("messages");
+    messagesContainer.innerHTML = ''; 
     messages.forEach(async (data) => {
         const decryptedMsg = await decryptRoomMessage(roomId, data.msg);
         appendMessage(data.user, decryptedMsg, false, data.timestamp);

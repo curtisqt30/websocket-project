@@ -654,14 +654,13 @@ def handle_typing(data):
         emit("typing", data, room=room_id, include_self=False)
 
 def broadcast_room_roster(roomId):
-    if roomId not in rooms:
-        return
     users_with_status = []
     now = time.time()
-    for sid, name in rooms[roomId]["users"].items():
+    room_users = rooms.get(roomId, {}).get("users", {})
+    for sid, username in room_users.items():
         state = "online" if sid in user_status and now - user_status[sid]["last"] < 35 else "idle"
-        users_with_status.append({"user": name, "state": state})
-    socketio.emit("roster_update", {"roomId": roomId, "users": users_with_status}, room=roomId)
+        users_with_status.append({"user": username, "state": state})
+    socketio.emit("roster_update", {"users": users_with_status}, room=roomId)
 
 @socketio.on("join")
 def handle_join(data):
@@ -669,23 +668,19 @@ def handle_join(data):
     username = session.get("username", "Guest")
     if roomId not in rooms:
         rooms[roomId] = {"users": {}}
-    join_room(roomId)
-    stale_sids = [sid for sid, name in rooms[roomId]["users"].items() if name == username]
-    for sid in stale_sids:
-        del rooms[roomId]["users"][sid]
+    rooms[roomId]["users"] = {sid: usr for sid, usr in rooms[roomId]["users"].items() if usr != username}
     rooms[roomId]["users"][request.sid] = username
-    join_msg = f"{username} has joined the room."
-    socketio.emit("user_joined", {"msg": join_msg}, room=roomId)
+    join_room(roomId)
+    emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
     broadcast_room_roster(roomId)
     room = Room.query.filter_by(room_code=roomId).first()
     if room:
-        messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp.asc()).limit(50).all()
-        message_history = [{
-            "user": User.query.get(msg.user_id).username,
-            "msg": msg.text,
-            "timestamp": msg.timestamp.strftime("%H:%M:%S")
-        } for msg in messages]
-        emit("chat_history", message_history, room=request.sid)
+        messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp).all()
+        message_list = [
+            {"user": User.query.get(msg.user_id).username, "msg": msg.text, "timestamp": msg.timestamp.strftime("%H:%M:%S")}
+            for msg in messages
+        ]
+        emit("chat_history", message_list, room=request.sid)
 
 @socketio.on("message")
 def handle_message(data):
