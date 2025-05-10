@@ -219,6 +219,12 @@ body, html {
     }
 }
 
+.system-message {
+    font-style: italic;
+    color: gray;
+    text-align: center;
+    margin: 10px 0;
+}
 /* LOGIN AND REGISTER PAGE STYLES */
 .wrapper {
     display: flex;

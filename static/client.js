@@ -104,8 +104,8 @@ document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
 function updateChatPanelVisibility() {
     const welcomePanel = document.querySelector(".welcome-panel");
     const chatPane = document.querySelector(".chat-pane");
-    const rosterList = document.getElementById("rosterList");
-    const currentRoom = sessionStorage.getItem("room");
+    const currentRoom = sessionStorage.getItem("room") || urlParams.get('roomId');
+
     if (currentRoom && currentRoom !== "None") {
         welcomePanel.style.display = "none";
         chatPane.style.display = "flex"; 
@@ -119,19 +119,14 @@ function updateChatPanelVisibility() {
 document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
 socket.on("connect", updateChatPanelVisibility);
 
+
 socket.on("user_joined", (data) => {
-    console.log(data.msg);
-    if (roomId && roomId !== "None") { 
-        fetchRoomAESKey(roomId);
-    }
-    sessionStorage.setItem("room", roomId);
-    updateChatPanelVisibility(
-        document.querySelector(".welcome-panel"),
-        document.querySelector(".chat-pane")
-    );
     appendMessage(null, data.msg, true);
 });
 
+socket.on("user_left", (data) => {
+    appendMessage(null, data.msg, true);
+});
 socket.on("rate_limit", (data) => alert(data.msg));
 
 socket.on("roster_update", (data) => {
@@ -369,8 +364,6 @@ socket.on("message", async (data) => {
     }
 });
 
-socket.on("user_left", (data) => appendMessage(null, data.msg, true));
-
 // Handle WebSocket errors
 socket.on("error", (error) => {
     console.error("[ERROR] WebSocket error:", error);
@@ -560,18 +553,15 @@ socket.on("chat_history", async (messages) => {
     });
 });
 
-function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
+function appendMessage(user, msg, isSystemMessage = false) {
     const messages = document.getElementById("messages");
     const messageElement = document.createElement("div");
-    timestamp = timestamp || new Date().toLocaleTimeString();
-
+    const timestamp = new Date().toLocaleTimeString();
     if (isSystemMessage) {
         messageElement.innerHTML = `<div style="font-style: italic;">${msg}</div>`;
     } else {
-        let cleanMsg = msg.startsWith("[ERROR]") ? "<em>[Could not decrypt]</em>" : marked.parse(msg).replace(/<p>|<\/p>/g, '');
-        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong><span>${cleanMsg}</span></div>`;
+        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <span>${marked.parse(msg).replace(/<p>|<\/p>/g, '')}</span></div>`;
     }
-
     messages.appendChild(messageElement);
     messages.scrollTop = messages.scrollHeight;
 }
