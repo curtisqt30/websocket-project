@@ -99,25 +99,23 @@ socket.on("connect", () => {
     updateChatPanelVisibility();
 });
 
-document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
-
 function updateChatPanelVisibility() {
     const welcomePanel = document.querySelector(".welcome-panel");
     const chatPane = document.querySelector(".chat-pane");
-    const currentRoom = urlParams.get('roomId') || sessionStorage.getItem('room');
-
+    const currentRoom = sessionStorage.getItem("room");
+    
     if (currentRoom && currentRoom !== "None") {
         welcomePanel.style.display = "none";
-        chatPane.style.display = "flex"; 
+        chatPane.style.display = "flex";
     } else {
         welcomePanel.style.display = "block";
         chatPane.style.display = "none";
+        document.getElementById("rosterList").innerHTML = "<p>No users in room.</p>";
     }
 }
 
 document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
 socket.on("connect", updateChatPanelVisibility);
-
 
 socket.on("user_joined", (data) => {
     appendMessage(null, data.msg, true);
@@ -157,6 +155,16 @@ socket.on("presence_update", stateList => {
     rosterList.innerHTML = stateList.map(u => {
         const color = u.state === "online" ? "green" : "gray";
         return `<p style="color:${color}">${u.user} (${u.state})</p>`;
+    }).join("");
+});
+
+socket.on("global_presence_update", users => {
+    const rosterList = document.getElementById("rosterList");
+    if (!rosterList) return;
+    rosterList.innerHTML = users.map(u => {
+        const statusClass = u.state === "online" ? "status-online" : "status-idle";
+        const selfTag = u.user === username ? " (You)" : "";
+        return `<div class="roster-row"><span class="status-dot ${statusClass}"></span>${u.user}${selfTag}</div>`;
     }).join("");
 });
 
@@ -557,10 +565,13 @@ function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
     const messageElement = document.createElement("div");
     timestamp = timestamp || new Date().toLocaleTimeString();
     if (isSystemMessage) {
-        messageElement.innerHTML = `<div style="font-style: italic;">${msg}</div>`;
+        messageElement.innerHTML = `<div class="system-message">[${timestamp}] ${msg}</div>`;
     } else {
-        let cleanMsg = msg.startsWith("[ERROR]") ? "<em>[Unable to decrypt message]</em>" : marked.parse(msg).replace(/<p>|<\/p>/g, '');
-        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <span>${cleanMsg}</span></div>`;
+        let cleanMsg = msg.startsWith("[ERROR]") ? "<em>[Could not decrypt]</em>" : marked.parse(msg).replace(/<p>|<\/p>/g, '');
+        messageElement.innerHTML = `<div>
+            <strong>[${timestamp}] ${user}:</strong> 
+            <span>${cleanMsg}</span>
+        </div>`;
     }
     messagesContainer.appendChild(messageElement);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;

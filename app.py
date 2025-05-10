@@ -309,13 +309,9 @@ def allowed_file(filename):
 
 def broadcast_presence():
     now = time.time()
-    for roomId, room_data in rooms.items():
-        updated_status = []
-        for sid, username in room_data["users"].items():
-            last_seen = user_status.get(sid, {}).get("last", 0)
-            state = "online" if now - last_seen < 35 else "idle"
-            updated_status.append({"user": username, "state": state})
-        socketio.emit("presence_update", updated_status, room=roomId)
+    updated_status = [{"user": data["user"], "state": "online" if now - data["last"] < 35 else "idle"}
+                      for data in user_status.values()]
+    socketio.emit("global_presence_update", updated_status, broadcast=True)
 
 IP_BLOCK_DURATION = 300
 MAX_FAILED_ATTEMPTS = 3
@@ -674,15 +670,16 @@ def handle_join(data):
     username = session.get("username", "Guest")
     if roomId not in rooms:
         rooms[roomId] = {"users": {}}
+    join_room(roomId)
     rooms[roomId]["users"][request.sid] = username
     join_room(roomId)
     emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
     broadcast_room_roster(roomId)
     room = Room.query.filter_by(room_code=roomId).first()
     if room:
-        messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp.asc()).all()
-        chat_history = [{"user": User.query.get(m.user_id).username, "msg": m.text, "timestamp": m.timestamp.strftime("%H:%M:%S")} for m in messages]
-        emit("chat_history", chat_history, room=request.sid)
+        messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp).limit(50).all()
+        for msg in messages:
+            emit("message", {"user": User.query.get(msg.user_id).username, "msg": msg.text}, room=request.sid)
 
 @socketio.on("message")
 def handle_message(data):
