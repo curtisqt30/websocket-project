@@ -5,6 +5,8 @@ const roomId = urlParams.get('roomId');
 
 if (!roomId || roomId === "None") {
     sessionStorage.removeItem("room");
+} else {
+    sessionStorage.setItem("room", roomId);
 }
 
 // Redirect to login if no username
