@@ -664,15 +664,18 @@ def broadcast_room_roster(roomId):
 
 @socketio.on("join")
 def handle_join(data):
+    if "username" not in session:
+        emit("room_invalid", {"msg": "Session expired. Please log in again."}, room=request.sid)
+        return
     roomId = data.get("roomId", "").strip().upper()
     username = session.get("username", "Guest")
     if roomId not in rooms:
-        rooms[roomId] = {"users": {}}
+        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
+        return
     join_room(roomId)
     stale_sids = [sid for sid, name in rooms[roomId]["users"].items() if name == username]
     for sid in stale_sids:
         del rooms[roomId]["users"][sid]
-
     rooms[roomId]["users"][request.sid] = username
     emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
     session["room"] = roomId
