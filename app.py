@@ -654,19 +654,16 @@ def handle_typing(data):
         emit("typing", data, room=room_id, include_self=False)
 
 def broadcast_room_roster(roomId):
-    if roomId == "None" or roomId not in rooms:
-        return 
     user_sids = rooms[roomId]["users"]
     users_with_status = []
     now = time.time()
-    seen_usernames = set()
+    seen_users = set()
     for sid in user_status:
         data = user_status[sid]
-        username = data["user"]
-        if username in user_sids and username not in seen_usernames:
+        if data["user"] in user_sids and data["user"] not in seen_users:
             state = "online" if now - data["last"] < 35 else "idle"
-            users_with_status.append({"user": username, "state": state})
-            seen_usernames.add(username)
+            users_with_status.append({"user": data["user"], "state": state})
+            seen_users.add(data["user"])
     socketio.emit("roster_update", {"roomId": roomId, "users": users_with_status}, room=roomId)
 
 @socketio.on("join")

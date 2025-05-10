@@ -96,11 +96,27 @@ socket.on("connect", () => {
     }
 });
 
+function updateChatPanelVisibility() {
+    const roomIdStored = sessionStorage.getItem("room");
+    if (!roomIdStored || roomIdStored === "None") {
+        if (welcomePanel) welcomePanel.style.display = "block";
+        if (chatPane) chatPane.style.display = "none";
+        document.getElementById("rosterList").innerHTML = "";
+    } else {
+        if (welcomePanel) welcomePanel.style.display = "none";
+        if (chatPane) chatPane.style.display = "block";
+    }
+}
+
+updateChatPanelVisibility();
+
 socket.on("user_joined", (data) => {
     console.log(data.msg);
     if (roomId && roomId !== "None") { 
         fetchRoomAESKey(roomId);
     }
+    sessionStorage.setItem("room", roomId);
+    updateChatPanelVisibility();
     appendMessage(null, data.msg, true);
 });
 
@@ -389,23 +405,22 @@ document.addEventListener("DOMContentLoaded", function () {
     // Display message for no chatroom
     const welcomePanel = document.querySelector(".welcome-panel");
     const chatPane = document.querySelector(".chat-pane");
-    
-    if (!roomId || roomId === "None") {
-        if (welcomePanel) welcomePanel.style.display = "block";
-        if (chatPane) chatPane.style.display = "none";
-        document.getElementById("rosterList").innerHTML = "";
-    } else {
-        if (welcomePanel) welcomePanel.style.display = "none";
-        if (chatPane) chatPane.style.display = "block";
-    }
 
+    if (leaveRoomButton) {
+        if (roomId && roomId !== "None") {
+            leaveRoomButton.style.display = "block";
+        } else {
+            leaveRoomButton.style.display = "none";
+        }
+    }
     // Leave room button functionality
     if (leaveRoomButton) {
-        leaveRoomButton.style.display = "block"; 
         leaveRoomButton.addEventListener("click", () => {
             socket.emit("leave", { user: username, roomId: roomId });
             sessionStorage.removeItem("room");
-            window.location.href = "/dashboard"; 
+            window.location.href = "/dashboard";
+            typingUsers.clear();
+            renderTypingBanner();
         });
     }
 
