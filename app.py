@@ -693,16 +693,12 @@ def handle_message(data):
         return
     encrypted_message = data.get("msg", "")
     socketio.emit("message", {"user": user, "msg": encrypted_message}, room=roomId)
-    log_message(roomId, user, encrypted_message)
     room = Room.query.filter_by(room_code=roomId).first()
-    user = User.query.filter_by(username=session.get("username")).first()
-    if room and user:
-        msg = Message(room_id=room.id,
-                    user_id=user.id,
-                    text=encrypted_message)
+    user_obj = User.query.filter_by(username=user).first()
+    if room and user_obj:
+        msg = Message(room_id=room.id, user_id=user_obj.id, text=encrypted_message)
         db.session.add(msg)
         db.session.commit()
-    user_last_message_time[request.sid] = time.time()
 
 @socketio.on("disconnect")
 def handle_disconnect():

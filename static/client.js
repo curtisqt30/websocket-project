@@ -104,7 +104,7 @@ document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
 function updateChatPanelVisibility() {
     const welcomePanel = document.querySelector(".welcome-panel");
     const chatPane = document.querySelector(".chat-pane");
-    const currentRoom = sessionStorage.getItem("room") || urlParams.get('roomId');
+    const currentRoom = urlParams.get('roomId') || sessionStorage.getItem('room');
 
     if (currentRoom && currentRoom !== "None") {
         welcomePanel.style.display = "none";
@@ -112,7 +112,6 @@ function updateChatPanelVisibility() {
     } else {
         welcomePanel.style.display = "block";
         chatPane.style.display = "none";
-        rosterList.innerHTML = "<p>No users in room.</p>";
     }
 }
 
@@ -357,7 +356,7 @@ socket.on("message", async (data) => {
         if (msgObject.type === 'file') {
             appendFileMessage(data.user, msgObject);
         } else {
-            appendMessage(data.user, decryptedMsg, false);
+            appendMessage(data.user, msgObject.content || decryptedMsg, false);
         }
     } catch (error) {
         appendMessage(data.user, decryptedMsg, false);
@@ -553,18 +552,20 @@ socket.on("chat_history", async (messages) => {
     });
 });
 
-function appendMessage(user, msg, isSystemMessage = false) {
-    const messages = document.getElementById("messages");
+function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
+    const messagesContainer = document.getElementById("messages");
     const messageElement = document.createElement("div");
-    const timestamp = new Date().toLocaleTimeString();
+    timestamp = timestamp || new Date().toLocaleTimeString();
     if (isSystemMessage) {
         messageElement.innerHTML = `<div style="font-style: italic;">${msg}</div>`;
     } else {
-        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <span>${marked.parse(msg).replace(/<p>|<\/p>/g, '')}</span></div>`;
+        let cleanMsg = msg.startsWith("[ERROR]") ? "<em>[Unable to decrypt message]</em>" : marked.parse(msg).replace(/<p>|<\/p>/g, '');
+        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <span>${cleanMsg}</span></div>`;
     }
-    messages.appendChild(messageElement);
-    messages.scrollTop = messages.scrollHeight;
+    messagesContainer.appendChild(messageElement);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
+
 
 async function appendFileMessage(user, msgObject) {
     const messages = document.getElementById("messages");

@@ -90,10 +90,10 @@ body, html {
 
 /* CHAT PANE */
 .chat-pane {
-    display: none;
+    display: flex;
     flex-direction: column;
-    flex: 1;
-    overflow: hidden;
+    overflow-y: auto;
+    height: 100%;
 }
 
 .messages {
