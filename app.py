@@ -655,30 +655,31 @@ def handle_typing(data):
 
 def broadcast_room_roster(roomId):
     if roomId in rooms:
-        users_with_status = []
+        user_states = []
         now = time.time()
         for sid, username in rooms[roomId]["users"].items():
             state = "online" if sid in user_status and now - user_status[sid]["last"] < 35 else "idle"
-            users_with_status.append({"user": username, "state": state})
-        socketio.emit("roster_update", {"roomId": roomId, "users": users_with_status}, room=roomId)
+            user_states.append({"user": username, "state": state})
+        seen = set()
+        unique_user_states = []
+        for u in user_states:
+            if u["user"] not in seen:
+                unique_user_states.append(u)
+                seen.add(u["user"])
+        socketio.emit("roster_update", {"roomId": roomId, "users": unique_user_states}, room=roomId)
 
 @socketio.on("join")
 def handle_join(data):
-    if "username" not in session:
-        emit("room_invalid", {"msg": "Session expired. Please log in again."}, room=request.sid)
-        return
     roomId = data.get("roomId", "").strip().upper()
     username = session.get("username", "Guest")
     if roomId not in rooms:
-        emit("room_invalid", {"msg": f"Room '{roomId}' no longer exists."}, room=request.sid)
-        return
+        rooms[roomId] = {"users": {}}
     join_room(roomId)
-    stale_sids = [sid for sid, name in rooms[roomId]["users"].items() if name == username]
+    stale_sids = [sid for sid, user in rooms[roomId]["users"].items() if user == username]
     for sid in stale_sids:
         del rooms[roomId]["users"][sid]
     rooms[roomId]["users"][request.sid] = username
     emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
-    session["room"] = roomId
     broadcast_room_roster(roomId)
 
 @socketio.on("message")

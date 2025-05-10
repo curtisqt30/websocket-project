@@ -82,6 +82,7 @@ body, html {
 }
 
 .welcome-panel {
+    display: block;
     margin: auto;
     text-align: center;
     color: #555;
@@ -89,7 +90,7 @@ body, html {
 
 /* CHAT PANE */
 .chat-pane {
-    display: flex;
+    display: none;
     flex-direction: column;
     flex: 1;
     overflow: hidden;
@@ -162,12 +163,13 @@ body, html {
 
 /* ROSTER */
 #roomRoster {
-    width: 200px;
-    background: #fafafa;
-    border-left: 1px solid #ddd;
-    padding: 10px;
     display: flex;
     flex-direction: column;
+    padding: 10px;
+    background: #fafafa;
+    border-left: 1px solid #ddd;
+    width: 200px;
+    overflow-y: auto;
 }
 
 #roomRoster h3 {

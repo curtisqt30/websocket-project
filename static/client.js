@@ -94,32 +94,35 @@ socket.on("connect", () => {
     console.log("Socket.IO Connected Successfully");
     if (username) {
         socket.emit("authenticate", { username });
-        updateChatPanelVisibility(
-            document.querySelector(".welcome-panel"),
-            document.querySelector(".chat-pane")
-        );
         if (roomId && roomId !== "None") {
-            console.log(`Attempting to Join Room: ${roomId}`);
+            console.log(`Joining room: ${roomId}`);
             socket.emit("join", { roomId });
+            fetchRoomAESKey(roomId);
             setTimeout(() => {
                 updateChatPanelVisibility(
                     document.querySelector(".welcome-panel"),
                     document.querySelector(".chat-pane")
                 );
-            }, 1000);
+            }, 500);
+        } else {
+            updateChatPanelVisibility(
+                document.querySelector(".welcome-panel"),
+                document.querySelector(".chat-pane")
+            );
         }
     }
 });
 
 function updateChatPanelVisibility(welcomePanel, chatPane) {
     const rosterList = document.getElementById("rosterList");
-    if (socket.connected && roomId && roomId !== "None") {
-        if (welcomePanel) welcomePanel.style.display = "none";
-        if (chatPane) chatPane.style.display = "block";
+    const currentRoom = sessionStorage.getItem("room");
+    if (currentRoom && currentRoom !== "None") {
+        welcomePanel.style.display = "none";
+        chatPane.style.display = "block";
     } else {
-        if (welcomePanel) welcomePanel.style.display = "block";
-        if (chatPane) chatPane.style.display = "none";
-        if (rosterList) rosterList.innerHTML = "";
+        welcomePanel.style.display = "block";
+        chatPane.style.display = "none";
+        rosterList.innerHTML = "<p>No users in room.</p>";
     }
 }
 
@@ -417,6 +420,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // const currentRoom = "{{ roomId }}";
     const messagesContainer = document.getElementById("messages");
     const leaveRoomButton = document.getElementById("leaveRoomButton");
+    const currentRoom = sessionStorage.getItem("room");
+    if (currentRoom && currentRoom !== "None") {
+        leaveRoomButton.style.display = "block";
+    } else {
+        leaveRoomButton.style.display = "none";
+    }
+    
     const uploadButton = document.getElementById("uploadButton");
 
     // Display message for no chatroom
