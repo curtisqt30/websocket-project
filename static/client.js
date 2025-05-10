@@ -99,22 +99,33 @@ socket.on("connect", () => {
     updateChatPanelVisibility();
 });
 
-document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
-
 function updateChatPanelVisibility() {
-    const welcomePanel = document.querySelector(".welcome-panel");
-    const chatPane = document.querySelector(".chat-pane");
-    const currentRoom = sessionStorage.getItem("room") || urlParams.get('roomId');
+    const welcomePanel = document.getElementById("welcomePanel");
+    const chatPane = document.getElementById("chatPane");
+    const messageInput = document.getElementById("messageInput");
+    const sendButton = document.getElementById("sendButton");
+    const currentRoom = sessionStorage.getItem("room") || "None";
 
-    if (currentRoom && currentRoom !== "None") {
+    if (currentRoom !== "None") {
         welcomePanel.style.display = "none";
         chatPane.style.display = "flex";
+        messageInput.disabled = false;
+        sendButton.disabled = false;
     } else {
         welcomePanel.style.display = "block";
-        chatPane.style.display = "none";
+        chatPane.style.display = "flex"; // Keep it visible, just disabled
+        messageInput.disabled = true;
+        sendButton.disabled = true;
         document.getElementById("rosterList").innerHTML = "<p>No users in room.</p>";
     }
 }
+
+// Trigger at load and on room join/leave
+document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
+socket.on("connect", updateChatPanelVisibility);
+socket.on("user_joined", updateChatPanelVisibility);
+socket.on("user_left", updateChatPanelVisibility);
+
 
 socket.on("user_joined", (data) => {
     appendMessage(null, data.msg, true);
@@ -128,14 +139,14 @@ socket.on("rate_limit", (data) => alert(data.msg));
 socket.on("roster_update", (data) => {
     const rosterEl = document.getElementById("rosterList");
     rosterEl.innerHTML = data.users.map(userObj => {
-        const statusClass = userObj.state === "online" ? "status-online" :
-                            userObj.state === "idle" ? "status-idle" : "status-offline";
+        const statusClass = userObj.state === "online" ? "status-online" : "status-idle";
         const selfTag = userObj.user === username ? " (You)" : "";
         return `<div class="roster-row">
                     <span class="status-dot ${statusClass}"></span>${userObj.user}${selfTag}
                 </div>`;
     }).join('');
 });
+
 
 socket.on("force_disconnect", (data) => {
     alert(data.msg);
