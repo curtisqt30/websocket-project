@@ -96,7 +96,7 @@ socket.on("connect", () => {
     }
 });
 
-function updateChatPanelVisibility() {
+function updateChatPanelVisibility(welcomePanel, chatPane) {
     const roomIdStored = sessionStorage.getItem("room");
     if (!roomIdStored || roomIdStored === "None") {
         if (welcomePanel) welcomePanel.style.display = "block";
@@ -108,7 +108,10 @@ function updateChatPanelVisibility() {
     }
 }
 
-updateChatPanelVisibility();
+const welcomePanel = document.querySelector(".welcome-panel");
+const chatPane = document.querySelector(".chat-pane");
+
+updateChatPanelVisibility(welcomePanel, chatPane);
 
 socket.on("user_joined", (data) => {
     console.log(data.msg);
@@ -116,7 +119,10 @@ socket.on("user_joined", (data) => {
         fetchRoomAESKey(roomId);
     }
     sessionStorage.setItem("room", roomId);
-    updateChatPanelVisibility();
+    updateChatPanelVisibility(
+        document.querySelector(".welcome-panel"),
+        document.querySelector(".chat-pane")
+    );
     appendMessage(null, data.msg, true);
 });
 
