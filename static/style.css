@@ -185,9 +185,17 @@ body, html {
     font-size: 0.92rem;
 }
 
-.status-online { background: #28a745; }
-.status-idle { background: #ffc107; }
-.status-offline { background: #dc3545; }
+.status-dot {
+    height: 10px;
+    width: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.status-online { background-color: #28a745; }
+.status-idle { background-color: #ffc107; }
+.status-offline { background-color: #dc3545; }
 
 /* RESPONSIVENESS */
 @media (max-width: 768px) {

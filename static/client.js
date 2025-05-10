@@ -115,6 +115,8 @@ function updateChatPanelVisibility() {
         rosterList.innerHTML = "<p>No users in room.</p>";
     }
 }
+document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
+socket.on("connect", updateChatPanelVisibility);
 
 socket.on("user_joined", (data) => {
     console.log(data.msg);
@@ -137,9 +139,7 @@ socket.on("roster_update", (data) => {
         const statusClass = userObj.state === "online" ? "status-online" :
                             userObj.state === "idle" ? "status-idle" : "status-offline";
         const selfTag = userObj.user === username ? " (You)" : "";
-        return `<div class="roster-row">
-                    <span class="status-dot ${statusClass}"></span> ${userObj.user}${selfTag}
-                </div>`;
+        return `<div class="roster-row"><span class="status-dot ${statusClass}"></span> ${userObj.user}${selfTag}</div>`;
     }).join('');
 });
 
@@ -548,25 +548,25 @@ function loadRooms() {
     savedRooms.forEach(roomId => addRoomToSidebar(roomId));
 }
 
-// Function to append messages to chat window
-function appendMessage(user, msg, isSystemMessage = false) {
+socket.on("chat_history", async (messages) => {
+    messages.forEach(async (data) => {
+        const decryptedMsg = await decryptRoomMessage(roomId, data.msg);
+        appendMessage(data.user, decryptedMsg, false, data.timestamp);
+    });
+});
+
+function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
     const messages = document.getElementById("messages");
     const messageElement = document.createElement("div");
-    const timestamp = new Date().toLocaleTimeString();
+    timestamp = timestamp || new Date().toLocaleTimeString();
+
     if (isSystemMessage) {
         messageElement.innerHTML = `<div style="font-style: italic;">${msg}</div>`;
     } else {
-        let cleanMsg = msg;
-        if (!msg || msg.startsWith("[ERROR]")) {
-            cleanMsg = "<em>[Could not decrypt this message]</em>";
-        } else {
-            cleanMsg = marked.parse(msg).replace(/<p>|<\/p>/g, '');
-        }
-        messageElement.innerHTML = `<div>
-            <strong>[${timestamp}] ${user}:</strong> 
-            <span>${cleanMsg}</span>
-        </div>`;
+        let cleanMsg = msg.startsWith("[ERROR]") ? "<em>[Could not decrypt]</em>" : marked.parse(msg).replace(/<p>|<\/p>/g, '');
+        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong><span>${cleanMsg}</span></div>`;
     }
+
     messages.appendChild(messageElement);
     messages.scrollTop = messages.scrollHeight;
 }

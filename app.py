@@ -670,10 +670,22 @@ def handle_join(data):
     if roomId not in rooms:
         rooms[roomId] = {"users": {}}
     join_room(roomId)
-    rooms[roomId]["users"] = {sid: name for sid, name in rooms[roomId]["users"].items() if name != username}
+    stale_sids = [sid for sid, name in rooms[roomId]["users"].items() if name == username]
+    for sid in stale_sids:
+        del rooms[roomId]["users"][sid]
     rooms[roomId]["users"][request.sid] = username
-    emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
+    join_msg = f"{username} has joined the room."
+    socketio.emit("user_joined", {"msg": join_msg}, room=roomId)
     broadcast_room_roster(roomId)
+    room = Room.query.filter_by(room_code=roomId).first()
+    if room:
+        messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp.asc()).limit(50).all()
+        message_history = [{
+            "user": User.query.get(msg.user_id).username,
+            "msg": msg.text,
+            "timestamp": msg.timestamp.strftime("%H:%M:%S")
+        } for msg in messages]
+        emit("chat_history", message_history, room=request.sid)
 
 @socketio.on("message")
 def handle_message(data):
