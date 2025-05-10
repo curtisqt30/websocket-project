@@ -99,11 +99,13 @@ socket.on("connect", () => {
     updateChatPanelVisibility();
 });
 
+document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
+
 function updateChatPanelVisibility() {
     const welcomePanel = document.querySelector(".welcome-panel");
     const chatPane = document.querySelector(".chat-pane");
-    const currentRoom = sessionStorage.getItem("room");
-    
+    const currentRoom = sessionStorage.getItem("room") || urlParams.get('roomId');
+
     if (currentRoom && currentRoom !== "None") {
         welcomePanel.style.display = "none";
         chatPane.style.display = "flex";
@@ -113,9 +115,6 @@ function updateChatPanelVisibility() {
         document.getElementById("rosterList").innerHTML = "<p>No users in room.</p>";
     }
 }
-
-document.addEventListener("DOMContentLoaded", updateChatPanelVisibility);
-socket.on("connect", updateChatPanelVisibility);
 
 socket.on("user_joined", (data) => {
     appendMessage(null, data.msg, true);
