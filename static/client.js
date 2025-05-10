@@ -108,11 +108,6 @@ function updateChatPanelVisibility(welcomePanel, chatPane) {
     }
 }
 
-const welcomePanel = document.querySelector(".welcome-panel");
-const chatPane = document.querySelector(".chat-pane");
-
-updateChatPanelVisibility(welcomePanel, chatPane);
-
 socket.on("user_joined", (data) => {
     console.log(data.msg);
     if (roomId && roomId !== "None") { 
@@ -129,8 +124,9 @@ socket.on("user_joined", (data) => {
 socket.on("rate_limit", (data) => alert(data.msg));
 
 socket.on("roster_update", (data) => {
-    const rosterEl = document.getElementById("rosterList");
-    if (!rosterEl) return;
+const rosterEl = document.getElementById("rosterList");
+    if (!rosterEl) { return; }
+    rosterEl.innerHTML = "";
     if (!data.users || data.users.length === 0) {
         rosterEl.innerHTML = "<p>No users in room.</p>";
         return;
@@ -411,6 +407,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Display message for no chatroom
     const welcomePanel = document.querySelector(".welcome-panel");
     const chatPane = document.querySelector(".chat-pane");
+
+    updateChatPanelVisibility(welcomePanel, chatPane);
 
     if (leaveRoomButton) {
         if (roomId && roomId !== "None") {
