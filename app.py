@@ -405,7 +405,6 @@ def monitor_inactivity():
         time.sleep(5)
 
 Thread(target=monitor_inactivity, daemon=True).start()
-user_last_message_time = {}
 
 def remove_room(roomId):
     if roomId in rooms:
@@ -667,7 +666,6 @@ def heartbeat(data):
 
 @socketio.on("connect")
 def handle_connect():
-    print(f"[INFO] New Connection SID: {request.sid}")
     ip = get_client_ip()
     if "username" not in session:
         disconnect()
@@ -676,10 +674,10 @@ def handle_connect():
 def handle_auth(data):
     username = data.get("username")
     user_status[request.sid] = {"user": username, "state": "online", "last": time.time()}
-    broadcast_presence()
-    room_id = data.get("roomId")
-    if room_id:
-        broadcast_room_roster(room_id)
+    # broadcast_presence()
+    # room_id = data.get("roomId")
+    # if room_id:
+    #     broadcast_room_roster(room_id)
 
 @socketio.on("typing")
 def handle_typing(data):
@@ -687,20 +685,20 @@ def handle_typing(data):
     if room_id:
         emit("typing", data, room=room_id, include_self=False)
 
-def broadcast_room_roster(roomId):
-    if roomId not in rooms or "users" not in rooms[roomId]:
-        return
-    user_sids = rooms[roomId]["users"]
-    users_with_status = []
-    now = time.time()
-    seen_users = set()
-    for sid, username in user_sids.items():
-        if username in seen_users:
-            continue
-        state = "online" if sid in user_status and now - user_status[sid]["last"] < 35 else "idle"
-        users_with_status.append({"user": username, "state": state})
-        seen_users.add(username)
-    socketio.emit("roster_update", {"users": users_with_status}, room=roomId)
+# def broadcast_room_roster(roomId):
+#     if roomId not in rooms or "users" not in rooms[roomId]:
+#         return
+#     user_sids = rooms[roomId]["users"]
+#     users_with_status = []
+#     now = time.time()
+#     seen_users = set()
+#     for sid, username in user_sids.items():
+#         if username in seen_users:
+#             continue
+#         state = "online" if sid in user_status and now - user_status[sid]["last"] < 35 else "idle"
+#         users_with_status.append({"user": username, "state": state})
+#         seen_users.add(username)
+#     socketio.emit("roster_update", {"users": users_with_status}, room=roomId)
 
 @socketio.on("join")
 def handle_join(data):
@@ -710,9 +708,8 @@ def handle_join(data):
         rooms[roomId] = {"users": {}}
     join_room(roomId)
     rooms[roomId]["users"][request.sid] = username
-    join_room(roomId)
-    emit("user_joined", {"msg": f"{username} joined the chat"}, room=roomId)
-    broadcast_room_roster(roomId)
+    emit("user_joined", {"user": username}, room=roomId)
+    # broadcast_room_roster(roomId)
     room = Room.query.filter_by(room_code=roomId).first()
     if room:
         messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp).limit(50).all()
@@ -740,26 +737,21 @@ def handle_disconnect():
     for roomId, room_data in rooms.items():
         if request.sid in room_data["users"]:
             username = room_data["users"].pop(request.sid)
-            emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
-            broadcast_room_roster(roomId)
+            emit("user_left", {"user": username}, room=roomId)
+            # broadcast_room_roster(roomId)
 
 @socketio.on("leave")
 def handle_leave(data):
     roomId = data.get("roomId", "").strip().upper()
     if roomId in rooms and request.sid in rooms[roomId]["users"]:
         username = rooms[roomId]["users"].pop(request.sid)
-        emit("user_left", {"msg": f"{username} left the chat"}, room=roomId)
-        broadcast_room_roster(roomId)
+        emit("user_left", {"user": username}, room=roomId)
+        # broadcast_room_roster(roomId)
 
 @socketio.on_error_default
 def websocket_error_handler(e):
     if isinstance(e, ssl.SSLError) and "HTTP_REQUEST" in str(e):
         return 
-
-@socketio.on("heartbeat")
-def heartbeat(data):
-    if request.sid in user_status:
-        user_status[request.sid]["last"] = time.time()
 
 @app.errorhandler(Exception)
 def handle_exception(e):

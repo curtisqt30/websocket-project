@@ -139,27 +139,24 @@ function updateLeaveButtonVisibility() {
 }
 
 socket.on("user_joined", (data) => {
-    const notice = `${data.user} joined the room.`;
-    appendMessage(null, notice, true);
+    appendMessage(null, `${data.user} joined the room.`, true);
 });
-
-socket.on("user_left", (data) => {
-    const notice = `${data.user} left the room.`;
-    appendMessage(null, notice, true);
+socket.on("user_left",  (data) => {
+    appendMessage(null, `${data.user} left the room.`,  true);
 });
 
 socket.on("rate_limit", (data) => alert(data.msg));
 
-// room list (unchanged, still targets #rosterList)
-socket.on('roster_update', data => {
-    const roomEl = document.getElementById('rosterList');
-    if (!roomEl) return;
-    roomEl.innerHTML = data.users.map(u => {
-        const dot = u.state === 'online' ? 'status-online' : 'status-idle';
-        const self = u.user === username ? ' (You)' : '';
-        return `<div class="roster-row"><span class="status-dot ${dot}"></span>${u.user}${self}</div>`;
-    }).join('');
-});
+// // room list (unchanged, still targets #rosterList)
+// socket.on('roster_update', data => {
+//     const roomEl = document.getElementById('rosterList');
+//     if (!roomEl) return;
+//     roomEl.innerHTML = data.users.map(u => {
+//         const dot = u.state === 'online' ? 'status-online' : 'status-idle';
+//         const self = u.user === username ? ' (You)' : '';
+//         return `<div class="roster-row"><span class="status-dot ${dot}"></span>${u.user}${self}</div>`;
+//     }).join('');
+// });
 
 socket.on("force_disconnect", (data) => {
     alert(data.msg);
@@ -173,23 +170,23 @@ socket.on("room_invalid", (data) => {
     window.location.href = "/dashboard";
 });
 
-socket.on("presence_update", stateList => {
-    const rosterList = document.getElementById("rosterList");
-    rosterList.innerHTML = stateList.map(u => {
-        const color = u.state === "online" ? "green" : "gray";
-        return `<p style="color:${color}">${u.user} (${u.state})</p>`;
-    }).join("");
-});
+// socket.on("presence_update", stateList => {
+//     const rosterList = document.getElementById("rosterList");
+//     rosterList.innerHTML = stateList.map(u => {
+//         const color = u.state === "online" ? "green" : "gray";
+//         return `<p style="color:${color}">${u.user} (${u.state})</p>`;
+//     }).join("");
+// });
 
-// global list
-socket.on('global_presence_update', users => {
-    const globalEl = document.getElementById('globalList');
-    if (!globalEl) return;
-    globalEl.innerHTML = users.map(u => {
-        const dot = u.state === 'online' ? 'status-online' : 'status-idle';
-        return `<div class="roster-row"><span class="status-dot ${dot}"></span>${u.user}</div>`;
-    }).join('');
-});
+// // global list
+// socket.on('global_presence_update', users => {
+//     const globalEl = document.getElementById('globalList');
+//     if (!globalEl) return;
+//     globalEl.innerHTML = users.map(u => {
+//         const dot = u.state === 'online' ? 'status-online' : 'status-idle';
+//         return `<div class="roster-row"><span class="status-dot ${dot}"></span>${u.user}</div>`;
+//     }).join('');
+// });
 
 // receive updates
 socket.on("typing", ({user, typing}) => {
