@@ -88,16 +88,15 @@ async function fetchRoomAESKey(roomId) {
     }
 }
 
-socket.on("connect", () => {
+socket.on("connect", async () => {
     console.log("Socket.IO Connected Successfully");
-    if (username) {
-        socket.emit("authenticate", { username });
-        if (roomId && roomId !== "None") {
-            console.log(`Attempting to Join Room: ${roomId}`);
-            socket.emit("join", { roomId });
-            fetchRoomAESKey(roomId);
-            updateCurrentRoomDisplay(roomId);
-        }
+    if (!username) return;
+    socket.emit("authenticate", { username });
+    if (roomId && roomId !== "None") {
+        console.log(`[INFO] Connecting to room ${roomId}`);
+        await fetchRoomAESKey(roomId);
+        socket.emit("join", { roomId });
+        updateCurrentRoomDisplay(roomId);
     }
 });
 
@@ -409,9 +408,9 @@ socket.on("message", async (data) => {
     try {
         const msgObject = JSON.parse(decryptedMsg);
         if (msgObject.type === 'file') {
-            appendFileMessage(data.user, msgObject);
+            appendFileMessage(data.user, msgObject, data.timestamp);
         } else {
-            appendMessage(data.user, msgObject.content || decryptedMsg, false);
+            appendMessage(data.user, msgObject.content || decryptedMsg, data.timestamp);
         }
     } catch (error) {
         appendMessage(data.user, decryptedMsg, false);
@@ -596,41 +595,38 @@ function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-async function appendFileMessage(user, msgObject) {
-    const b64Text = await (await fetch(msgObject.url)).text();
-    const encryptedArray = Uint8Array.from(
-        atob(b64Text.trim()), c => c.charCodeAt(0)
-    );
+async function appendFileMessage(user, meta, isoTs) {
+    const buf            = await (await fetch(meta.url)).arrayBuffer();
+    const encryptedArray = new Uint8Array(buf);
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
-    if (!aesKeyBase64) {
-        console.error("Missing AES Key");
+    if (!aesKeyBase64) { console.error("Missing AES key"); return; }
+    const aesKey = await crypto.subtle.importKey(
+        "raw",
+        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
+        { name: "AES-GCM" },
+        false,
+        ["decrypt"]
+    );
+    const iv         = encryptedArray.slice(0, 12);
+    const ciphertext = encryptedArray.slice(12);
+    let decrypted;
+    try {
+        decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, aesKey, ciphertext);
+    } catch (err) {
+        console.error("[ERROR] File decrypt failed:", err);
+        appendMessage(null, "[Could not decrypt file]", true, isoTs);
         return;
     }
-    const aesKey = await crypto.subtle.importKey(
-        'raw',
-        Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
-        { name: 'AES-GCM' },
-        false,
-        ['decrypt']
-    );
-    const iv = encryptedArray.slice(0, 12);
-    const ciphertext = encryptedArray.slice(12);
-    try {
-        const decryptedBuffer = await crypto.subtle.decrypt(
-            { name: 'AES-GCM', iv },
-            aesKey,
-            ciphertext
-        );
-        const blob = new Blob([decryptedBuffer]);
-        const url = URL.createObjectURL(blob);
-        const messageElement = document.createElement("div");
-        const timestamp = new Date().toLocaleTimeString();
-        const fileContent = `<a href="${url}" download="${msgObject.filename}">${msgObject.filename}</a>`;
-        messageElement.innerHTML = `<div><strong>[${timestamp}] ${user}:</strong> <span>${fileContent}</span></div>`;
-        document.getElementById("messages").appendChild(messageElement);
-    } catch (error) {
-        console.error("[ERROR] Decryption failed:", error);
-    }
+    const blobUrl = URL.createObjectURL(new Blob([decrypted]));
+    const ts      = isoTs
+        ? new Date(isoTs).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+        : new Date().toLocaleTimeString();
+    const container = document.getElementById("messages");
+    const line      = document.createElement("div");
+    line.innerHTML =
+        `<strong>[${ts}] ${user}:</strong> <a href="${blobUrl}" download="${meta.filename}">${meta.filename}</a>`;
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
 }
 
 // Function to add room to sidebar
