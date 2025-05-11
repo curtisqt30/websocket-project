@@ -118,8 +118,7 @@ CurtisConnect is a **cloud-hosted, end-to-end encrypted chat platform**. All tra
 * **Time Management**: Starting development earlier could have improved the overall quality, stability, and scalability of the final deliverable.
 
 
-**Conclusion**
-: This project meets the functional and security requirements outlined for the phase. The process of building this project from Phase 1 to Phase 3 revealed several areas for improvement, particularly around UX, state management, and development workflows. Given more time, a more polished user experience could have been fully realized. That said, I am satisfied with the progress made. This experience provided valuable lessons for future projects.
+**Conclusion**: This project meets the functional and security requirements outlined for the phase. The process of building this project from Phase 1 to Phase 3 revealed several areas for improvement, particularly around UX, state management, and development workflows. Given more time, a more polished user experience could have been fully realized. That said, I am satisfied with the progress made. This experience provided valuable lessons for future projects.
 
 ---
 
