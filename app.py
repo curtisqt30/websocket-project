@@ -465,10 +465,9 @@ def upload_file():
     print(f"[DEBUG] AES Key for upload {room_id}: {base64.b64encode(aes_key).decode()}")
     if file:
         filename = secure_filename(file.filename)
-        file_data = file.read()
-        encrypted_data = encrypt_message(file_data, aes_key)
+        ciphertext = file.read() 
         blob = bucket.blob(f"{room_id}/{filename}.enc")
-        blob.upload_from_string(encrypted_data)
+        blob.upload_from_string(ciphertext, content_type="application/octet-stream")
         # After uploading, notify all users in the room
         url = blob.generate_signed_url(
                  expiration=datetime.timedelta(hours=24),

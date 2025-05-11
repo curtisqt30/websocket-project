@@ -314,41 +314,29 @@ async function encryptMessage(plainText) {
 
 async function uploadEncryptedFileToServer(file, roomId) {
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
-    if (!aesKeyBase64) {
-        alert("Room key not found.");
-        return;
-    }
+    if (!aesKeyBase64) { alert("Room key not found."); return; }
+
     const aesKey = await crypto.subtle.importKey(
-        'raw',
+        "raw",
         Uint8Array.from(atob(aesKeyBase64), c => c.charCodeAt(0)),
-        { name: 'AES-GCM' },
+        { name: "AES-GCM" },
         false,
-        ['encrypt']
+        ["encrypt"]
     );
-    const fileBuffer = await file.arrayBuffer();
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encryptedBuffer = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv },
-        aesKey,
-        fileBuffer
-    );
-    const combinedBuffer = new Uint8Array(iv.byteLength + encryptedBuffer.byteLength);
-    combinedBuffer.set(iv, 0);
-    combinedBuffer.set(new Uint8Array(encryptedBuffer), iv.byteLength);
-    const formData = new FormData();
-    const encryptedBlob = new Blob([combinedBuffer]);
-    formData.append('file', encryptedBlob, file.name);
-    formData.append('roomId', roomId);
-    const response = await fetch('/upload', {
-        method: 'POST',
-        body: formData
-    });
-    const result = await response.json();
-    if (result.success) {
-        alert(`File uploaded successfully: ${result.filename}`);
-    } else {
-        alert(`Upload failed: ${result.message}`);
-    }
+    const buf      = await file.arrayBuffer();
+    const iv       = crypto.getRandomValues(new Uint8Array(12));
+    const ct       = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, aesKey, buf);
+    const combined = new Uint8Array(iv.byteLength + ct.byteLength);
+    combined.set(iv, 0);                 // iv + ciphertext
+    combined.set(new Uint8Array(ct), iv.byteLength);
+
+    const form = new FormData();
+    form.append("file", new Blob([combined]), file.name);
+    form.append("roomId", roomId);
+
+    const res = await fetch("/upload", { method: "POST", body: form });
+    const out = await res.json();
+    alert(out.success ? `Uploaded: ${out.filename}` : `Failed: ${out.message}`);
 }
 
 function str2ab(str) {
