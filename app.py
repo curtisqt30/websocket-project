@@ -49,7 +49,7 @@ credentials = service_account.Credentials.from_service_account_info(creds_info)
 
 # Initialize storage client with loaded credentials
 storage_client = storage.Client(credentials=credentials, project=creds_info['project_id'])
-bucket = storage_client.bucket("curtisconnect-a1630.appspot.com")
+bucket = storage_client.bucket("curtisconnect-a1630.firebasestorage.app")
 
 # Remove default Flask log handlers and quiet gevent/socketio
 for h in list(app.logger.handlers):
