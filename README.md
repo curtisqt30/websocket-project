@@ -5,10 +5,7 @@
 
 ## 1  Introduction  
 
-CurtisConnect is a **cloud-hosted, end-to-end encrypted chat platform**.  
-All traffic uses **secure WebSockets (WSS)**; any plain-text `ws://` attempt is refused by the client.  
-Messages and file-blobs are encrypted in-browser with **AES-256-GCM**; per-room keys are exchanged with **RSA-4096 + OAEP**.  
-Because encryption happens before data leave the browser, neither the Flask server nor Firebase Storage can decrypt user content.
+CurtisConnect is a **cloud-hosted, end-to-end encrypted chat platform**. All traffic uses **secure WebSockets (WSS)**; any plain-text `ws://` attempt is refused by the client.  Messages and file-blobs are encrypted in-browser with **AES-256-GCM**; per-room keys are exchanged with **RSA-4096 + OAEP**. Because encryption happens before data leave the browser, neither the Flask server nor Firebase Storage can decrypt user content.
 
 ---
 
