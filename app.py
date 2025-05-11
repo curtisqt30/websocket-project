@@ -63,6 +63,11 @@ logging.getLogger("werkzeug").disabled = True
 def silent_404(e):
     return "", 404
 
+@app.errorhandler(500)
+def internal_server_error(e):
+    return jsonify({"success": False, "message": "Internal server error occurred."}), 500
+
+
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
