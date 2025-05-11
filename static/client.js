@@ -610,10 +610,11 @@ function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-
 async function appendFileMessage(user, msgObject) {
-    const response = await fetch(msgObject.url);
-    const encryptedBuffer = await response.arrayBuffer();
+    const b64Text = await (await fetch(msgObject.url)).text();
+    const encryptedArray = Uint8Array.from(
+        atob(b64Text.trim()), c => c.charCodeAt(0)
+    );
     const aesKeyBase64 = sessionStorage.getItem(`room_aes_key_${roomId}`);
     if (!aesKeyBase64) {
         console.error("Missing AES Key");
@@ -626,7 +627,6 @@ async function appendFileMessage(user, msgObject) {
         false,
         ['decrypt']
     );
-    const encryptedArray = new Uint8Array(encryptedBuffer);
     const iv = encryptedArray.slice(0, 12);
     const ciphertext = encryptedArray.slice(12);
     try {
