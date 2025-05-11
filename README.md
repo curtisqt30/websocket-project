@@ -114,4 +114,4 @@ Because encryption happens before data leave the browser, neither the Flask serv
 
 ---
 
-*© 2025 Curtis Quan-Tran – MIT License* 
+*© 2025 Curtis Quan-Tran* 
