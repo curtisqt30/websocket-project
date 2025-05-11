@@ -5,25 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CurtisConnect</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='socket.io.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='marked.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='emoji-mart.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='client.js') }}"></script>
+    <!-- Defer all scripts so DOM is ready before they run -->
+    <script src="{{ url_for('static', filename='socket.io.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='marked.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='emoji-mart.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='client.js') }}" defer></script>
 </head>
 <body>
     <div class="app-container">
+        <!-- ───── Left sidebar → room controls → fixed width ───── -->
         <div class="sidebar">
             <h2>CurtisConnect</h2>
             <button id="createRoom">Create Room</button>
             <input type="text" id="roomCode" placeholder="Room Code" maxlength="4">
             <button id="joinRoom">Join Room</button>
             <div class="room-list" id="roomList"></div>
-            <h3>Current Room: <span id="roomId" style="color: #ffffff;">None</span></h3>
+            <h3>Current Room: <span id="roomId" style="color:#fff">None</span></h3>
             <button id="leaveRoomButton" class="leave-btn" style="display:none;">🏠 Leave Room</button>
             <p><a href="/logout">Logout</a></p>
         </div>
 
+        <!-- ───── Main flex area ───── -->
         <div class="content-area">
+            <!-- chat + input column -->
             <div class="main-chat-area">
                 <div class="welcome-panel" id="welcomePanel">
                     <h2>Welcome to CurtisConnect</h2>
@@ -32,6 +36,7 @@
                 <div class="chat-pane" id="chatPane">
                     <div id="messages" class="messages"></div>
                     <div id="typingBanner" class="typing-banner" style="display:none;"></div>
+
                     <div class="message-input">
                         <div class="top-actions">
                             <textarea id="messageInput" placeholder="Type a message..." maxlength="150"></textarea>
@@ -45,12 +50,14 @@
                 </div>
             </div>
 
-            <div id="roomRoster">
-                <h3>In Room</h3>
+            <!-- roster column (right side) -->
+            <aside id="rosterPane">
+                <h3>Everyone Online</h3>
+                <div id="globalList" class="roster"></div>
+                <h3 style="margin-top:1rem;">In Room</h3>
                 <div id="rosterList" class="roster"></div>
-            </div>
-        </div>
-
-    </div>
+            </aside>
+        </div><!-- /.content-area -->
+    </div><!-- /.app-container -->
 </body>
 </html>

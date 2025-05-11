@@ -18,6 +18,8 @@ const socket = io(window.location.origin, {
     transports: ["websocket"]
 });
 
+socket.emit('authenticate', { username, roomId });
+
 setInterval(() => {
     socket.emit("heartbeat", { user: username });
 }, 30000);  // every 30 seconds
@@ -148,17 +150,16 @@ socket.on("user_left", (data) => {
 
 socket.on("rate_limit", (data) => alert(data.msg));
 
-socket.on("roster_update", (data) => {
-    const rosterEl = document.getElementById("rosterList");
-    rosterEl.innerHTML = data.users.map(userObj => {
-        const statusClass = userObj.state === "online" ? "status-online" : "status-idle";
-        const selfTag = userObj.user === username ? " (You)" : "";
-        return `<div class="roster-row">
-                    <span class="status-dot ${statusClass}"></span>${userObj.user}${selfTag}
-                </div>`;
+// room list (unchanged, still targets #rosterList)
+socket.on('roster_update', data => {
+    const roomEl = document.getElementById('rosterList');
+    if (!roomEl) return;
+    roomEl.innerHTML = data.users.map(u => {
+        const dot = u.state === 'online' ? 'status-online' : 'status-idle';
+        const self = u.user === username ? ' (You)' : '';
+        return `<div class="roster-row"><span class="status-dot ${dot}"></span>${u.user}${self}</div>`;
     }).join('');
 });
-
 
 socket.on("force_disconnect", (data) => {
     alert(data.msg);
@@ -180,14 +181,14 @@ socket.on("presence_update", stateList => {
     }).join("");
 });
 
-socket.on("global_presence_update", users => {
-    const rosterList = document.getElementById("rosterList");
-    if (!rosterList) return;
-    rosterList.innerHTML = users.map(u => {
-        const statusClass = u.state === "online" ? "status-online" : "status-idle";
-        const selfTag = u.user === username ? " (You)" : "";
-        return `<div class="roster-row"><span class="status-dot ${statusClass}"></span>${u.user}${selfTag}</div>`;
-    }).join("");
+// global list
+socket.on('global_presence_update', users => {
+    const globalEl = document.getElementById('globalList');
+    if (!globalEl) return;
+    globalEl.innerHTML = users.map(u => {
+        const dot = u.state === 'online' ? 'status-online' : 'status-idle';
+        return `<div class="roster-row"><span class="status-dot ${dot}"></span>${u.user}</div>`;
+    }).join('');
 });
 
 // receive updates
