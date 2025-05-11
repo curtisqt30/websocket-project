@@ -112,14 +112,14 @@ CurtisConnect is a **cloud-hosted, end-to-end encrypted chat platform**. All tra
 ## 9  Project Reflections & Lessons Learned
 
 **Challenges**
-* **Chat History Persistence** Attempts to implement chat history persistence across room switches proved unstable due to WebSocket event handling limitations and the current architecture.
-* **Active Roster Synchronization** Synchronizing real-time user rosters occasionally caused duplication or stale states. Improvements to state management are needed to make this process more reliable.  
-* **Testing Workflow Limitations** Relying on cloud-hosted Render deployments for every change significantly slowed iteration speed (~2-3 minutes per test). For future projects, setting up a local-first testing workflow with environment toggling and WebSocket reconfiguration would allow faster development cycles and a cleaner commit history.
-* **Time Management** Starting development earlier could have improved the overall quality, stability, and scalability of the final deliverable.
+* **Chat History Persistence**: Attempts to implement chat history persistence across room switches proved unstable due to WebSocket event handling limitations and the current architecture.
+* **Active Roster Synchronization**: Synchronizing real-time user rosters occasionally caused duplication or stale states. Improvements to state management are needed to make this process more reliable.  
+* **Testing Workflow Limitations**: Relying on cloud-hosted Render deployments for every change significantly slowed iteration speed (~2-3 minutes per test). For future projects, setting up a local-first testing workflow with environment toggling and WebSocket reconfiguration would allow faster development cycles and a cleaner commit history.
+* **Time Management**: Starting development earlier could have improved the overall quality, stability, and scalability of the final deliverable.
 
 
 **Conclusion**
-This project meets the functional and security requirements outlined for the phase. The process of building this project from Phase 1 to Phase 3 revealed several areas for improvement, particularly around UX, state management, and development workflows. Given more time, a more polished user experience could have been fully realized. That said, I am satisfied with the progress made. This experience provided valuable lessons for future projects.
+: This project meets the functional and security requirements outlined for the phase. The process of building this project from Phase 1 to Phase 3 revealed several areas for improvement, particularly around UX, state management, and development workflows. Given more time, a more polished user experience could have been fully realized. That said, I am satisfied with the progress made. This experience provided valuable lessons for future projects.
 
 ---
 
