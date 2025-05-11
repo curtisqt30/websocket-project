@@ -298,8 +298,8 @@ def apply_security_headers(response):
         "script-src 'self' https://www.google.com https://www.gstatic.com https://cdn.jsdelivr.net 'unsafe-inline'; "
         "frame-src https://www.google.com https://www.gstatic.com; "
         "style-src 'self' 'unsafe-inline'; "
-        "connect-src 'self' https://curtisconnect.secure-tech.org wss://curtisconnect.secure-tech.org https://cdn.jsdelivr.net https://www.google.com https://firebasestorage.googleapis.com; "
-        "img-src 'self' data: blob: https://www.gstatic.com https://firebasestorage.googleapis.com;"
+        "connect-src 'self' https://curtisconnect.secure-tech.org wss://curtisconnect.secure-tech.org https://cdn.jsdelivr.net https://www.google.com https://firebasestorage.googleapis.com https://storage.googleapis.com; "
+        "img-src 'self' data: blob: https://www.gstatic.com https://firebasestorage.googleapis.com https://storage.googleapis.com;"
     )
     return response
 
