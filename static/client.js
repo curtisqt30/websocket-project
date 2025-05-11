@@ -3,6 +3,7 @@ const username = sessionStorage.getItem("username");
 const urlParams = new URLSearchParams(window.location.search);
 let roomId = urlParams.get('roomId') || sessionStorage.getItem('room') || "None";
 sessionStorage.setItem("room", roomId);
+updateCurrentRoomDisplay(roomId);
 
 // Redirect to login if no username
 if (!username) {
@@ -93,9 +94,17 @@ socket.on("connect", () => {
             console.log(`Attempting to Join Room: ${roomId}`);
             socket.emit("join", { roomId });
             fetchRoomAESKey(roomId);
+            updateCurrentRoomDisplay(roomId);
         }
     }
 });
+
+function updateCurrentRoomDisplay(room) {
+    const roomDisplay = document.getElementById("roomId");
+    if (roomDisplay) {
+        roomDisplay.textContent = room && room !== "None" ? room : "None";
+    }
+}
 
 function updateChatPanelVisibility() {
     const welcomePanel = document.querySelector(".welcome-panel");
@@ -485,6 +494,7 @@ document.addEventListener("DOMContentLoaded", function () {
             sessionStorage.removeItem("room");
             window.location.href = "/dashboard";
             typingUsers.clear();
+            updateCurrentRoomDisplay("None");
             renderTypingBanner();
         });
     }
@@ -541,7 +551,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 alert("File size exceeds 8MB.");
                 return;
             }
-            await uploadEncryptedFileToServer(file, roomId);  // ✅ Now uses server route
+            await uploadEncryptedFileToServer(file, roomId); 
         });
         fileInput.click();
     });
@@ -636,7 +646,6 @@ async function appendFileMessage(user, msgObject) {
         console.error("[ERROR] Decryption failed:", error);
     }
 }
-
 
 // Function to add room to sidebar
 function addRoomToSidebar(roomId) {
