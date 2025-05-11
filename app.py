@@ -476,7 +476,16 @@ def upload_file():
             "filename": filename,
             "url": f"https://storage.googleapis.com/{bucket.name}/{room_id}/{filename}.enc"
         }
-        socketio.emit("message", {"user": session.get("username"), "msg": json.dumps(file_info), "roomId": room_id}, room=room_id)
+
+        # Encrypt the file metadata before emitting
+        encrypted_file_info = encrypt_message(json.dumps(file_info), aes_key)
+
+        # Broadcast to all clients in the room
+        socketio.emit("message", {
+            "user": session.get("username"),
+            "msg": encrypted_file_info,
+            "roomId": room_id
+        }, room=room_id)
 
         return jsonify({"success": True, "filename": filename}), 200
     return jsonify({"success": False, "message": "Something went wrong"}), 500
