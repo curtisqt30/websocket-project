@@ -677,6 +677,9 @@ def handle_auth(data):
     username = data.get("username")
     user_status[request.sid] = {"user": username, "state": "online", "last": time.time()}
     broadcast_presence()
+    room_id = data.get("roomId")
+    if room_id:
+        broadcast_room_roster(room_id)
 
 @socketio.on("typing")
 def handle_typing(data):
