@@ -37,8 +37,6 @@ CurtisConnect is a **cloud-hosted, end-to-end encrypted chat platform**. All tra
 | **File storage** | Stored on local disk | Stored in **Firebase Storage** with signed URLs |
 | **Password hashing** | SHA-256 (unsalted) | **bcrypt + salt** |
 | **Registration security** | None | **Google reCAPTCHA v2** |
-| **Message limit** | 50 chars | **150 chars** |
-| **Idle timeout** | 40 s + warning | **30 min**, no banner |
 | **Logging** | Verbose SSL/404 noise | Noise suppressed |
 | **UI** | Simple chat page | New dashboard sidebar, room list, “Leave Room” button |
 
