@@ -471,10 +471,13 @@ def upload_file():
         blob = bucket.blob(f"{room_id}/{filename}.enc")
         blob.upload_from_string(encrypted_data)
         # After uploading, notify all users in the room
+        url = blob.generate_signed_url(
+                 expiration=datetime.timedelta(hours=24),
+                 method="GET")
         file_info = {
-            "type": "file",
-            "filename": filename,
-            "url": f"https://storage.googleapis.com/{bucket.name}/{room_id}/{filename}.enc"
+             "type": "file",
+             "filename": filename,
+             "url": url
         }
 
         # Encrypt the file metadata before emitting
