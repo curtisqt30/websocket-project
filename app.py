@@ -708,13 +708,16 @@ def handle_join(data):
         rooms[roomId] = {"users": {}}
     join_room(roomId)
     rooms[roomId]["users"][request.sid] = username
-    emit("user_joined", {"user": username}, room=roomId)
+    emit("user_joined",
+         {"user": username,
+          "timestamp": dt_cls.utcnow().isoformat()},
+         room=roomId)    
     # broadcast_room_roster(roomId)
-    room = Room.query.filter_by(room_code=roomId).first()
-    if room:
-        messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp).limit(50).all()
-        for msg in messages:
-            emit("message", {"user": User.query.get(msg.user_id).username, "msg": msg.text}, room=request.sid)
+    # room = Room.query.filter_by(room_code=roomId).first()
+    # if room:
+    #     messages = Message.query.filter_by(room_id=room.id).order_by(Message.timestamp).limit(50).all()
+    #     for msg in messages:
+    #         emit("message", {"user": User.query.get(msg.user_id).username, "msg": msg.text}, room=request.sid)
 
 @socketio.on("message")
 def handle_message(data):

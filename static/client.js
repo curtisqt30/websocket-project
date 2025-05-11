@@ -582,14 +582,14 @@ function loadRooms() {
     savedRooms.forEach(roomId => addRoomToSidebar(roomId));
 }
 
-socket.on("chat_history", async (messages) => {
-    const messagesContainer = document.getElementById("messages");
-    messagesContainer.innerHTML = ''; 
-    messages.forEach(async (data) => {
-        const decryptedMsg = await decryptRoomMessage(roomId, data.msg);
-        appendMessage(data.user, decryptedMsg, false, data.timestamp);
-    });
-});
+// socket.on("chat_history", async (messages) => {
+//     const messagesContainer = document.getElementById("messages");
+//     messagesContainer.innerHTML = ''; 
+//     messages.forEach(async (data) => {
+//         const decryptedMsg = await decryptRoomMessage(roomId, data.msg);
+//         appendMessage(data.user, decryptedMsg, false, data.timestamp);
+//     });
+// });
 
 function appendMessage(user, msg, isSystemMessage = false, timestamp = null) {
     const messagesContainer = document.getElementById("messages");
