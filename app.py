@@ -129,7 +129,7 @@ with app.app_context():
         db.create_all()
     existing_rooms = Room.query.all()
     for room in existing_rooms:
-        rooms[room.room_code] = {"users": []}
+        rooms[room.room_code] = {"users": {}}
         if room.aes_key:
             room_aes_keys[room.room_code] = base64.b64decode(room.aes_key)
     print(f"[INFO] Loaded {len(rooms)} rooms into memory.")
@@ -583,7 +583,7 @@ def create_room():
     db.session.add(new_room)
     db.session.commit()
     room_aes_keys[code] = aes_key_bytes
-    rooms[code] = {"users": []}
+    rooms[code] = {"users": {}}
     return jsonify({"success": True, "roomId": code})
 
 @app.route("/join-room")
